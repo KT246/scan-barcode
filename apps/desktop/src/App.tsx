@@ -64,40 +64,11 @@ const fallbackConnectInfo: DesktopConnectInfo = {
   tokenPreview: 'ABC...123',
   connectedClients: 0,
 }
-const fallbackTypingSettings: DesktopTypingSettings = {
-  autoEnter: true,
-  autoTab: false,
-  suffix: 'enter',
-  typingDelayMs: 80,
-}
-
-type Page = 'home' | 'history' | 'settings'
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
-function normalizeTypingSettings(settings: DesktopTypingSettings): DesktopTypingSettings {
-  const suffix: DesktopTypingSuffix = settings.autoTab
-    ? 'tab'
-    : settings.autoEnter
-      ? 'enter'
-      : settings.suffix
-  const typingDelayMs = Number.isFinite(settings.typingDelayMs)
-    ? Math.max(0, Math.min(1000, Math.round(settings.typingDelayMs)))
-    : fallbackTypingSettings.typingDelayMs
-
-  return {
-    autoEnter: suffix === 'enter',
-    autoTab: suffix === 'tab',
-    suffix,
-    typingDelayMs,
-  }
-}
-
 function App() {
-  const [page, setPage] = useState<Page>('home')
   const [connectInfo, setConnectInfo] = useState<DesktopConnectInfo>(fallbackConnectInfo)
   const [scanHistory, setScanHistory] = useState<DesktopScanRecord[]>([])
-  const [typingSettings, setTypingSettings] = useState<DesktopTypingSettings>(fallbackTypingSettings)
-  const [settingsSaveState, setSettingsSaveState] = useState<SettingsSaveState>('idle')
 
   useEffect(() => {
     const api = window.phoneScan
@@ -128,12 +99,6 @@ function App() {
     api.getScanHistory().then((rows) => {
       if (mounted) {
         setScanHistory(rows)
-      }
-    })
-
-    api.getSettings().then((settings) => {
-      if (mounted) {
-        setTypingSettings(settings)
       }
     })
 
@@ -191,20 +156,6 @@ function App() {
 
     window.close()
   }
-  const updateTypingSettings = async (nextSettings: DesktopTypingSettings) => {
-    const normalized = normalizeTypingSettings(nextSettings)
-    setTypingSettings(normalized)
-    setSettingsSaveState('saving')
-
-    try {
-      const savedSettings = await window.phoneScan?.updateSettings(normalized)
-      setTypingSettings(savedSettings ?? normalized)
-      setSettingsSaveState('saved')
-    } catch {
-      setSettingsSaveState('error')
-    }
-  }
-
   useEffect(() => {
     if (connectInfo.qrDataUrl || !connectInfo.scannerUrl) {
       return
@@ -253,35 +204,10 @@ function App() {
             </div>
 
             <nav className="nav-list">
-              <button
-                className={`nav-item ${page === 'home' ? 'active' : ''}`}
-                type="button"
-                onClick={() => setPage('home')}
-              >
-                <Home size={26} fill={page === 'home' ? 'currentColor' : 'none'} strokeWidth={2.2} />
+              <div className="nav-item active" aria-current="page">
+                <Home size={26} fill="currentColor" strokeWidth={2.2} />
                 <span>Home</span>
-              </button>
-              <button
-                className={`nav-item ${page === 'history' ? 'active' : ''}`}
-                type="button"
-                onClick={() => setPage('history')}
-              >
-                <Clock3
-                  size={27}
-                  fill={page === 'history' ? 'currentColor' : 'none'}
-                  stroke={page === 'history' ? '#ffffff' : 'currentColor'}
-                  strokeWidth={2.2}
-                />
-                <span>History</span>
-              </button>
-              <button
-                className={`nav-item ${page === 'settings' ? 'active' : ''}`}
-                type="button"
-                onClick={() => setPage('settings')}
-              >
-                <Settings size={27} strokeWidth={2.2} />
-                <span>Settings</span>
-              </button>
+              </div>
             </nav>
 
             <div className="version">
@@ -290,24 +216,13 @@ function App() {
             </div>
           </aside>
 
-          {page === 'history' ? (
-            <HistoryScreen rows={scanHistory} />
-          ) : page === 'settings' ? (
-            <SettingsScreen
-              connectInfo={connectInfo}
-              saveState={settingsSaveState}
-              settings={typingSettings}
-              onUpdateSettings={updateTypingSettings}
-            />
-          ) : (
-            <HomeScreen
-              connectInfo={connectInfo}
-              latestScan={scanHistory[0] ?? null}
-              onCopyScannerUrl={copyScannerUrl}
-              onOpenScannerPage={openScannerPage}
-              onRefreshConnectInfo={refreshConnectInfo}
-            />
-          )}
+          <HomeScreen
+            connectInfo={connectInfo}
+            latestScan={scanHistory[0] ?? null}
+            onCopyScannerUrl={copyScannerUrl}
+            onOpenScannerPage={openScannerPage}
+            onRefreshConnectInfo={refreshConnectInfo}
+          />
         </div>
       </section>
     </main>

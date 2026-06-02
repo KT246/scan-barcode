@@ -1,22 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
+import { BrowserMultiFormatOneDReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
 import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
-  Clipboard,
-  Edit3,
   Info,
-  Keyboard,
   Link2,
-  Menu,
   Monitor,
   Send,
+  Settings,
   ScanLine,
   Wifi,
   X,
 } from 'lucide-react'
 
-type MobilePage = 'connect' | 'scanner' | 'manual'
+type MobilePage = 'connect' | 'scanner'
 
 type DesktopConnection = {
   connected: boolean
@@ -33,7 +30,7 @@ type DesktopConnection = {
 
 type LastScan = {
   value: string
-  type: 'barcode' | 'qr' | 'manual'
+  type: 'barcode' | 'qr'
   time: string
 }
 
@@ -55,6 +52,127 @@ type SendResult = {
 }
 
 type SendBarcode = (value: string, type: LastScan['type'], timestamp?: number) => Promise<SendResult>
+
+type ScannerSettings = {
+  autoSend: boolean
+  duplicateLock: boolean
+  scanIntervalMs: number
+}
+
+const scannerSettingsStorageKey = 'phone-scan.scanner-settings'
+const defaultScannerSettings: ScannerSettings = {
+  autoSend: true,
+  duplicateLock: true,
+  scanIntervalMs: 1000,
+}
+const barcodeReaderOptions = {
+  delayBetweenScanAttempts: 70,
+  delayBetweenScanSuccess: 350,
+  tryPlayVideoTimeout: 3000,
+}
+const barcodeVideoConstraints: MediaStreamConstraints = {
+  video: {
+    facingMode: {
+      ideal: 'environment',
+    },
+    width: {
+      ideal: 1280,
+    },
+    height: {
+      ideal: 720,
+    },
+    frameRate: {
+      ideal: 30,
+    },
+  },
+}
+
+let scanAudioContext: AudioContext | null = null
+
+function playBarcodeScanFeedback() {
+  navigator.vibrate?.(45)
+
+  const AudioContextConstructor = window.AudioContext
+    ?? (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+
+  if (!AudioContextConstructor) {
+    return
+  }
+
+  try {
+    const audioContext = scanAudioContext ?? new AudioContextConstructor()
+    scanAudioContext = audioContext
+
+    const playSound = () => {
+      const now = audioContext.currentTime
+      const oscillator = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+
+      oscillator.type = 'square'
+      oscillator.frequency.setValueAtTime(1180, now)
+      oscillator.frequency.exponentialRampToValueAtTime(920, now + 0.1)
+      gain.gain.setValueAtTime(0.0001, now)
+      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+      oscillator.connect(gain)
+      gain.connect(audioContext.destination)
+      oscillator.start(now)
+      oscillator.stop(now + 0.15)
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect()
+        gain.disconnect()
+      }, { once: true })
+    }
+
+    if (audioContext.state === 'suspended') {
+      void audioContext.resume().then(playSound).catch(() => undefined)
+      return
+    }
+
+    playSound()
+  } catch {
+    // Audio feedback is best-effort; scanning must continue even if the browser blocks sound.
+  }
+}
+
+function applyBarcodeCameraTuning(controls: IScannerControls) {
+  try {
+    controls.streamVideoConstraintsApply?.({
+      advanced: [
+        { focusMode: 'continuous' } as unknown as MediaTrackConstraintSet,
+        { exposureMode: 'continuous' } as unknown as MediaTrackConstraintSet,
+      ],
+    })
+  } catch {
+    // Browser support varies; scan should continue with the base constraints.
+  }
+}
+
+function normalizeScannerSettings(settings: Partial<ScannerSettings>): ScannerSettings {
+  const scanIntervalMs = Number.isFinite(settings.scanIntervalMs)
+    ? Math.max(200, Math.min(10000, Math.round(settings.scanIntervalMs ?? defaultScannerSettings.scanIntervalMs)))
+    : defaultScannerSettings.scanIntervalMs
+
+  return {
+    autoSend: settings.autoSend ?? defaultScannerSettings.autoSend,
+    duplicateLock: settings.duplicateLock ?? defaultScannerSettings.duplicateLock,
+    scanIntervalMs,
+  }
+}
+
+function getInitialScannerSettings() {
+  try {
+    const rawSettings = window.localStorage.getItem(scannerSettingsStorageKey)
+
+    if (!rawSettings) {
+      return defaultScannerSettings
+    }
+
+    return normalizeScannerSettings(JSON.parse(rawSettings) as Partial<ScannerSettings>)
+  } catch {
+    return defaultScannerSettings
+  }
+}
 
 function formatScanTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
@@ -291,15 +409,6 @@ function App() {
             lastSend={lastSend}
             recordLocalScan={recordLocalScan}
             sendBarcode={sendBarcode}
-            setPage={setPage}
-          />
-        ) : page === 'manual' ? (
-          <ManualScreen
-            connection={connection}
-            lastScan={lastScan}
-            lastSend={lastSend}
-            recordLocalScan={recordLocalScan}
-            sendBarcode={sendBarcode}
           />
         ) : (
           <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} />
@@ -496,34 +605,56 @@ function ScannerScreen({
   lastSend,
   recordLocalScan,
   sendBarcode,
-  setPage,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
   lastSend: LastSend
   recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
   sendBarcode: SendBarcode
-  setPage: (page: MobilePage) => void
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
+  const scanInFlightRef = useRef(false)
+  const lastAcceptedScanRef = useRef<{ value: string; at: number } | null>(null)
+  const connectionRef = useRef(connection)
+  const recordLocalScanRef = useRef(recordLocalScan)
+  const sendBarcodeRef = useRef(sendBarcode)
+  const [scannerSettings, setScannerSettings] = useState<ScannerSettings>(() => getInitialScannerSettings())
+  const settingsRef = useRef(scannerSettings)
   const [scannerActive, setScannerActive] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [scanMessage, setScanMessage] = useState('Align the barcode within the frame.')
   const cameraNeedsTrustedHttps = !window.isSecureContext
 
-  useEffect(() => {
-    return () => {
-      controlsRef.current?.stop()
-      controlsRef.current = null
-    }
-  }, [])
+  const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
+    setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
+  }
 
-  const toggleScanner = async () => {
-    if (scannerActive) {
-      controlsRef.current?.stop()
-      controlsRef.current = null
-      setScannerActive(false)
-      setScanMessage('Scanner stopped.')
+  useEffect(() => {
+    connectionRef.current = connection
+    recordLocalScanRef.current = recordLocalScan
+    sendBarcodeRef.current = sendBarcode
+  }, [connection, recordLocalScan, sendBarcode])
+
+  useEffect(() => {
+    settingsRef.current = scannerSettings
+
+    try {
+      window.localStorage.setItem(scannerSettingsStorageKey, JSON.stringify(scannerSettings))
+    } catch {
+      // Storage can be unavailable in private browsing; runtime settings still work.
+    }
+  }, [scannerSettings])
+
+  const stopScanner = () => {
+    controlsRef.current?.stop()
+    controlsRef.current = null
+    scanInFlightRef.current = false
+    setScannerActive(false)
+  }
+
+  const startScanner = async () => {
+    if (controlsRef.current) {
       return
     }
 
@@ -533,66 +664,109 @@ function ScannerScreen({
     }
 
     try {
-      const reader = new BrowserMultiFormatReader()
+      const reader = new BrowserMultiFormatOneDReader(undefined, barcodeReaderOptions)
+      scanInFlightRef.current = false
       setScannerActive(true)
-      setScanMessage('Camera is scanning...')
-      controlsRef.current = await reader.decodeFromConstraints(
-        {
-          video: {
-            facingMode: {
-              ideal: 'environment',
-            },
-          },
-        },
+      setScanMessage('Scanning barcode only...')
+      const controls = await reader.decodeFromConstraints(
+        barcodeVideoConstraints,
         videoRef.current ?? undefined,
         async (result) => {
-          if (!result) {
+          if (!result || scanInFlightRef.current) {
             return
           }
 
-          const value = result.getText()
+          const value = result.getText().trim()
+
+          if (!value) {
+            return
+          }
+
           const scannerUrl = getDesktopScannerUrl(value)
-          const timestamp = Date.now()
-          controlsRef.current?.stop()
-          controlsRef.current = null
-          setScannerActive(false)
 
           if (scannerUrl) {
-            setScanMessage('Desktop connection QR detected. Opening Connect link...')
-            window.location.assign(scannerUrl.href)
+            setScanMessage('QR ignored. Use the Connect tab to scan desktop QR.')
             return
           }
 
-          recordLocalScan(value, 'barcode', timestamp)
+          const timestamp = Date.now()
+          const lastAcceptedScan = lastAcceptedScanRef.current
+          const activeSettings = settingsRef.current
+          const elapsedSinceLastScan = lastAcceptedScan ? timestamp - lastAcceptedScan.at : Number.POSITIVE_INFINITY
 
-          if (!connection.connected) {
-            setScanMessage('Barcode scanned, but desktop is not connected.')
-            await sendBarcode(value, 'barcode', timestamp)
+          if (
+            lastAcceptedScan
+            && elapsedSinceLastScan < activeSettings.scanIntervalMs
+            && (lastAcceptedScan.value !== value || activeSettings.duplicateLock)
+          ) {
+            setScanMessage(
+              lastAcceptedScan.value === value
+                ? 'Duplicate barcode ignored.'
+                : `Waiting ${Math.ceil((activeSettings.scanIntervalMs - elapsedSinceLastScan) / 1000)}s before next scan.`,
+            )
             return
           }
 
-          setScanMessage('Barcode scanned. Sending to desktop...')
-          const sendResult = await sendBarcode(value, 'barcode', timestamp)
-          setScanMessage(
-            sendResult.delivered
-              ? sendResult.typed
-                ? 'Desktop received and typed the barcode.'
-                : 'Desktop received it, but typing failed. Check focused input.'
-              : 'Could not send barcode. Check connection, firewall, or QR IP.',
-          )
+          scanInFlightRef.current = true
+          lastAcceptedScanRef.current = { value, at: timestamp }
+
+          try {
+            recordLocalScanRef.current(value, 'barcode', timestamp)
+            playBarcodeScanFeedback()
+
+            if (!activeSettings.autoSend) {
+              setScanMessage('Barcode scanned. Auto send is off.')
+              return
+            }
+
+            if (!connectionRef.current.connected) {
+              setScanMessage('Barcode scanned, but desktop is not connected.')
+              await sendBarcodeRef.current(value, 'barcode', timestamp)
+              return
+            }
+
+            setScanMessage('Barcode scanned. Sending to desktop...')
+            const sendResult = await sendBarcodeRef.current(value, 'barcode', timestamp)
+            setScanMessage(
+              sendResult.delivered
+                ? sendResult.typed
+                  ? 'Desktop received and typed the barcode.'
+                  : 'Desktop received it, but typing failed. Check focused input.'
+                : 'Could not send barcode. Check connection, firewall, or QR IP.',
+            )
+          } finally {
+            scanInFlightRef.current = false
+          }
         },
       )
+      controlsRef.current = controls
+      applyBarcodeCameraTuning(controls)
     } catch (error) {
+      controlsRef.current?.stop()
+      controlsRef.current = null
       setScannerActive(false)
       setScanMessage(error instanceof Error ? error.message : 'Camera unavailable.')
     }
   }
 
+  useEffect(() => {
+    void startScanner()
+
+    return () => {
+      stopScanner()
+    }
+  }, [])
+
   return (
     <div className="scanner-content">
       <header className="scanner-header">
-        <button className="hamburger" type="button" aria-label="Menu">
-          <Menu size={41} strokeWidth={2.5} />
+        <button
+          className={`hamburger scanner-settings-toggle ${settingsOpen ? 'active' : ''}`}
+          type="button"
+          aria-label="Scanner settings"
+          onClick={() => setSettingsOpen((open) => !open)}
+        >
+          <Settings size={39} strokeWidth={2.5} />
         </button>
         <h1>Camera Scanner</h1>
         <button className="connected-pill" type="button">
@@ -606,13 +780,66 @@ function ScannerScreen({
 
       {cameraNeedsTrustedHttps && <CertificateNotice connection={connection} />}
 
+      {settingsOpen && (
+        <section className="scanner-settings-card">
+          <div className="scanner-settings-header">
+            <div>
+              <strong>Scanner Settings</strong>
+              <span>Barcode-only camera behavior</span>
+            </div>
+            <button type="button" aria-label="Close scanner settings" onClick={() => setSettingsOpen(false)}>
+              <X size={24} strokeWidth={2.5} />
+            </button>
+          </div>
+
+          <label className="scanner-setting-row">
+            <span>
+              <strong>Scan interval</strong>
+              <small>Minimum delay before accepting the next read.</small>
+            </span>
+            <input
+              min="0.2"
+              max="10"
+              step="0.1"
+              type="number"
+              value={scannerSettings.scanIntervalMs / 1000}
+              onChange={(event) => updateScannerSettings({ scanIntervalMs: Number(event.target.value) * 1000 })}
+            />
+          </label>
+
+          <label className="scanner-setting-row">
+            <span>
+              <strong>Ignore duplicates</strong>
+              <small>Block the same barcode while it stays in frame.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={scannerSettings.duplicateLock}
+              onChange={(event) => updateScannerSettings({ duplicateLock: event.target.checked })}
+            />
+          </label>
+
+          <label className="scanner-setting-row">
+            <span>
+              <strong>Auto send</strong>
+              <small>Send each barcode to desktop after reading.</small>
+            </span>
+            <input
+              type="checkbox"
+              checked={scannerSettings.autoSend}
+              onChange={(event) => updateScannerSettings({ autoSend: event.target.checked })}
+            />
+          </label>
+        </section>
+      )}
+
       <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
         <video ref={videoRef} className="camera-video" muted playsInline />
         {!scannerActive && (
           <div className="camera-placeholder">
             <ScanLine size={64} strokeWidth={2.2} />
-            <strong>Tap Scan to start camera</strong>
-            <span>Align the barcode inside the frame.</span>
+            <strong>Starting barcode scanner</strong>
+            <span>Scanner starts automatically on this tab.</span>
           </div>
         )}
         <span className="corner tl" />
@@ -649,123 +876,6 @@ function ScannerScreen({
       </section>
 
       <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
-
-      <section className="scanner-controls">
-        <button className="scan-control" type="button" onClick={toggleScanner}>
-          <ScanLine size={59} strokeWidth={2.4} />
-          <strong>{scannerActive ? 'Stop' : 'Scan'}</strong>
-        </button>
-        <button className="side-control" type="button" onClick={() => setPage('manual')}>
-          <Keyboard size={42} strokeWidth={2.3} />
-          <strong>Manual Input</strong>
-        </button>
-      </section>
-    </div>
-  )
-}
-
-function ManualScreen({
-  connection,
-  lastScan,
-  lastSend,
-  recordLocalScan,
-  sendBarcode,
-}: {
-  connection: DesktopConnection
-  lastScan: LastScan | null
-  lastSend: LastSend
-  recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
-  sendBarcode: SendBarcode
-}) {
-  const [manualValue, setManualValue] = useState(lastScan?.value ?? '')
-  const sendManualValue = async () => {
-    const timestamp = Date.now()
-    const scan = recordLocalScan(manualValue, 'manual', timestamp)
-
-    if (!scan) {
-      await sendBarcode(manualValue, 'manual', timestamp)
-      return
-    }
-
-    await sendBarcode(scan.value, 'manual', timestamp)
-  }
-
-  return (
-    <div className="scanner-content manual-content">
-      <header className="scanner-header manual-header">
-        <button className="hamburger" type="button" aria-label="Menu">
-          <Menu size={41} strokeWidth={2.5} />
-        </button>
-        <h1>Manual Input</h1>
-        <button className="connected-pill" type="button">
-          <span className={connection.connected ? 'online' : 'offline'} />
-          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
-          <i>⌄</i>
-        </button>
-      </header>
-
-      <DesktopStatusPill connection={connection} />
-
-      <section className="manual-entry-card">
-        <div className="manual-entry-title">
-          <span>
-            <Edit3 size={46} strokeWidth={2.3} />
-          </span>
-          <div>
-            <h2>Enter Barcode Manually</h2>
-            <p>Type or paste a barcode and send to your computer</p>
-          </div>
-        </div>
-
-        <label className="barcode-field">
-          <strong>Barcode</strong>
-          <span className="input-shell">
-            <input value={manualValue} onChange={(event) => setManualValue(event.target.value)} />
-            <i />
-            <button type="button" aria-label="Clear barcode" onClick={() => setManualValue('')}>
-              <X size={27} strokeWidth={3} />
-            </button>
-          </span>
-        </label>
-
-        <div className="input-meta">
-          <span>Supports 1D / 2D barcodes</span>
-          <span>{manualValue.trim().length} characters</span>
-        </div>
-
-        <button className="manual-send-button" type="button" onClick={sendManualValue}>
-          <Send size={31} strokeWidth={2.4} />
-          <span>Send</span>
-        </button>
-
-        <button
-          className="paste-button"
-          type="button"
-          onClick={async () => {
-            const text = await navigator.clipboard?.readText()
-            setManualValue(text ?? manualValue)
-          }}
-        >
-          <Clipboard size={28} strokeWidth={2.3} />
-          <span>Paste from Clipboard</span>
-        </button>
-      </section>
-
-      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
-
-      <section className="manual-tip-card">
-        <Info size={34} strokeWidth={2.3} />
-        <div>
-          <strong>Tip</strong>
-          <p>Make sure the input cursor is in the target field on your computer<br />before sending.</p>
-        </div>
-        <div className="tip-window-art" aria-hidden="true">
-          <span className="tip-window-top" />
-          <span className="tip-window-line one" />
-          <span className="tip-window-line two" />
-          <span className="tip-cursor" />
-        </div>
-      </section>
     </div>
   )
 }
@@ -791,6 +901,11 @@ function DesktopStatusPill({
     </section>
   )
 }
+
+/*
+
+          <i>⌄</i>
+*/
 
 function CertificateNotice({ connection }: { connection: DesktopConnection }) {
   return (
@@ -863,7 +978,6 @@ function MobileTabs({
 }) {
   const tabs = [
     { page: 'scanner' as const, label: 'Scanner', icon: <ScanLine size={34} strokeWidth={2.2} /> },
-    { page: 'manual' as const, label: 'Manual', icon: <Edit3 size={34} strokeWidth={2.3} /> },
     { page: 'connect' as const, label: 'Connect', icon: <Link2 size={35} strokeWidth={2.6} /> },
   ]
 
