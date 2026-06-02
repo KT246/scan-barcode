@@ -6,8 +6,8 @@ export type TypingResult = {
 }
 
 type TypingOptions = {
-  autoEnter?: boolean
-  autoTab?: boolean
+  suffix?: 'none' | 'enter' | 'tab'
+  typingDelayMs?: number
 }
 
 function quotePowerShellString(value: string) {
@@ -22,11 +22,12 @@ export async function typeIntoFocusedWindow(value: string, options: TypingOption
     }
   }
 
-  const suffix = options.autoTab ? '{TAB}' : options.autoEnter ? '{ENTER}' : ''
+  const suffix = options.suffix === 'tab' ? '{TAB}' : options.suffix === 'enter' ? '{ENTER}' : ''
+  const typingDelayMs = Math.max(0, Math.min(1000, Math.round(options.typingDelayMs ?? 80)))
   const script = [
     'Add-Type -AssemblyName System.Windows.Forms',
     `Set-Clipboard -Value ${quotePowerShellString(value)}`,
-    'Start-Sleep -Milliseconds 80',
+    `Start-Sleep -Milliseconds ${typingDelayMs}`,
     '[System.Windows.Forms.SendKeys]::SendWait("^v")',
     suffix ? `[System.Windows.Forms.SendKeys]::SendWait("${suffix}")` : '',
   ]

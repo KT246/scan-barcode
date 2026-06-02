@@ -3,35 +3,20 @@ import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
 import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
-  Camera,
-  Clock3,
   Clipboard,
-  CornerDownLeft,
   Edit3,
-  Eraser,
-  Flashlight,
-  HelpCircle,
   Info,
   Keyboard,
   Link2,
   Menu,
   Monitor,
-  Pause,
-  QrCode,
-  RotateCcw,
   Send,
   ScanLine,
-  Settings,
-  SquarePen,
   Wifi,
-  Trash2,
   X,
-  Zap,
-  ZoomIn,
-  ZoomOut,
 } from 'lucide-react'
 
-type MobilePage = 'connect' | 'scanner' | 'manual' | 'shortcuts'
+type MobilePage = 'connect' | 'scanner' | 'manual'
 
 type DesktopConnection = {
   connected: boolean
@@ -192,11 +177,9 @@ function App() {
     <main className="pwa-app" aria-label="Phone Scan PWA">
       <section className="app-screen">
         {page === 'scanner' ? (
-          <ScannerScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} />
+          <ScannerScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} setPage={setPage} />
         ) : page === 'manual' ? (
           <ManualScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} />
-        ) : page === 'shortcuts' ? (
-          <ShortcutsScreen connection={connection} />
         ) : (
           <ConnectScreen connection={connection} setPage={setPage} />
         )}
@@ -225,46 +208,12 @@ function ConnectScreen({
           <Link2 size={40} strokeWidth={3} />
           <div>
             <h1>Connect to Desktop</h1>
-            <p>Connect this phone to your desktop tool<br />to start scanning and typing</p>
+            <p>{connection.connected ? `${connection.computerName} is ready` : connection.error ?? 'Scan the desktop QR code to connect'}</p>
           </div>
         </div>
-        <button className="help-link" type="button">
-          <HelpCircle size={28} />
-          <span>Help</span>
-        </button>
       </header>
 
-      <section className="connect-card qr-connect-card">
-        <div className="qr-card-top">
-          <span className="scan-orb">
-            <ScanLine size={43} strokeWidth={2.7} />
-          </span>
-          <div className="qr-copy">
-            <h2>Scan QR Code</h2>
-            <p>Scan the QR code from<br />Phone Scan (Desktop)</p>
-          </div>
-          <DesktopQrIllustration />
-        </div>
-
-        <button className="scan-button" type="button" onClick={() => setPage('scanner')}>
-          <QrCode size={33} strokeWidth={2.5} />
-          <span>{connection.connected ? 'Open Scanner' : 'Waiting for Desktop'}</span>
-        </button>
-
-        <div className="divider">
-          <span />
-          <strong>or</strong>
-          <span />
-        </div>
-
-        <button className="manual-button" type="button">
-          <Keyboard size={31} strokeWidth={2.4} />
-          <span>Enter IP Address Manually</span>
-          <i>›</i>
-        </button>
-      </section>
-
-      <section className="connect-card status-card-mobile">
+      <section className="connect-card status-card-mobile compact-connect-card">
         <div className="mobile-card-title">
           <span className="bars">
             <i />
@@ -297,24 +246,24 @@ function ConnectScreen({
         </div>
       </section>
 
-      <section className="connect-card how-card">
+      <section className="connect-card how-card compact-how-card">
         <div className="mobile-card-title">
           <span className="info-dot">i</span>
-          <h2>How to connect</h2>
+          <h2>Before scanning</h2>
         </div>
 
         <div className="how-body">
           <ol>
-            <li><span>1</span><p>Open Phone Scan on your computer</p></li>
-            <li><span>2</span><p>Make sure both devices are on the same Wi-Fi network</p></li>
-            <li><span>3</span><p>Scan the QR code or enter the IP address</p></li>
-            <li><span>4</span><p>Start scanning and typing!</p></li>
+            <li><span>1</span><p>Keep phone and desktop on the same Wi-Fi or USB tethering.</p></li>
+            <li><span>2</span><p>Click the target input on desktop before scanning.</p></li>
+            <li><span>3</span><p>Use Scanner or Manual to send barcode data.</p></li>
           </ol>
-          <div className="bulb-art" aria-hidden="true">
-            <span className="bulb-rays" />
-            <span className="bulb" />
-          </div>
         </div>
+
+        <button className="scan-button connect-open-scanner" type="button" onClick={() => setPage('scanner')}>
+          <ScanLine size={30} strokeWidth={2.5} />
+          <span>Open Scanner</span>
+        </button>
       </section>
     </div>
   )
@@ -324,10 +273,12 @@ function ScannerScreen({
   connection,
   lastScan,
   sendBarcode,
+  setPage,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
   sendBarcode: SendBarcode
+  setPage: (page: MobilePage) => void
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
@@ -408,26 +359,17 @@ function ScannerScreen({
 
       <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
         <video ref={videoRef} className="camera-video" muted playsInline />
-        <div className="blur-bg" />
-        <button className="light-pill" type="button">
-          <Zap size={30} strokeWidth={2.4} />
-          <span>Tap to turn on light</span>
-        </button>
+        {!scannerActive && (
+          <div className="camera-placeholder">
+            <ScanLine size={64} strokeWidth={2.2} />
+            <strong>Tap Scan to start camera</strong>
+            <span>Align the barcode inside the frame.</span>
+          </div>
+        )}
         <span className="corner tl" />
         <span className="corner tr" />
         <span className="corner bl" />
         <span className="corner br" />
-        <div className="parcel-box">
-          <div className="barcode-label">
-            <span>EAN-13</span>
-            <div className="barcode-lines">
-              {Array.from({ length: 47 }, (_, index) => (
-                <i key={index} />
-              ))}
-            </div>
-            <strong>8&nbsp;&nbsp;936123&nbsp;&nbsp;456789</strong>
-          </div>
-        </div>
         <span className="scan-laser" />
       </section>
 
@@ -446,41 +388,23 @@ function ScannerScreen({
             <span>Send Again</span>
           </button>
         </div>
-        <div className="scan-tips">
+        <div className="scan-tips compact-scan-tips">
           <div>
             <div className="tips-title">
               <span>◌</span>
-              <strong>Scan Tips</strong>
+              <strong>Status</strong>
             </div>
             <p>{scanMessage}</p>
-            <p>Make sure it is well-lit and not blurry.</p>
-          </div>
-          <div className="tips-barcode-art" aria-hidden="true">
-            <span className="tip-corner tl" />
-            <span className="tip-corner tr" />
-            <span className="tip-corner bl" />
-            <span className="tip-corner br" />
-            <div className="mini-barcode">
-              {Array.from({ length: 18 }, (_, index) => (
-                <i key={index} />
-              ))}
-            </div>
-            <em />
           </div>
         </div>
       </section>
 
       <section className="scanner-controls">
-        <button className="side-control" type="button">
-          <Flashlight size={42} strokeWidth={2.3} />
-          <strong>Flash</strong>
-          <span>Off</span>
-        </button>
         <button className="scan-control" type="button" onClick={toggleScanner}>
           <ScanLine size={59} strokeWidth={2.4} />
           <strong>{scannerActive ? 'Stop' : 'Scan'}</strong>
         </button>
-        <button className="side-control" type="button">
+        <button className="side-control" type="button" onClick={() => setPage('manual')}>
           <Keyboard size={42} strokeWidth={2.3} />
           <strong>Manual Input</strong>
         </button>
@@ -498,15 +422,7 @@ function ManualScreen({
   lastScan: LastScan | null
   sendBarcode: SendBarcode
 }) {
-  const [manualValue, setManualValue] = useState(lastScan?.value ?? '8936123456789')
-  const recentInputs = [
-    ...(lastScan ? [[lastScan.value, `Today, ${lastScan.time}`]] : []),
-    ['8936123456789', 'Today, 10:24 AM'],
-    ['6901234567892', 'Today, 10:20 AM'],
-    ['1234567890123', 'Today, 10:18 AM'],
-    ['9786041234567', 'Today, 10:15 AM'],
-    ['8857123456789', 'Today, 10:12 AM'],
-  ]
+  const [manualValue, setManualValue] = useState(lastScan?.value ?? '')
 
   return (
     <div className="scanner-content manual-content">
@@ -569,35 +485,6 @@ function ManualScreen({
         </button>
       </section>
 
-      <section className="recent-card">
-        <div className="recent-title">
-          <span>
-            <Clock3 size={34} strokeWidth={2.2} />
-          </span>
-          <h2>Recent Inputs</h2>
-        </div>
-
-        <div className="recent-list">
-          {recentInputs.map(([code, time]) => (
-            <button className="recent-item" type="button" key={code}>
-              <span className="recent-barcode-icon">
-                <Barcode size={31} strokeWidth={2.1} />
-              </span>
-              <span>
-                <strong>{code}</strong>
-                <small>{time}</small>
-              </span>
-              <i>›</i>
-            </button>
-          ))}
-        </div>
-
-        <button className="clear-history-button" type="button">
-          <Trash2 size={28} strokeWidth={2.2} />
-          <span>Clear History</span>
-        </button>
-      </section>
-
       <section className="manual-tip-card">
         <Info size={34} strokeWidth={2.3} />
         <div>
@@ -609,118 +496,6 @@ function ManualScreen({
           <span className="tip-window-line one" />
           <span className="tip-window-line two" />
           <span className="tip-cursor" />
-        </div>
-      </section>
-    </div>
-  )
-}
-
-function ShortcutsScreen({ connection }: { connection: DesktopConnection }) {
-  const globalShortcuts = [
-    {
-      icon: <ScanLine />,
-      title: 'Start / Stop Scanning',
-      description: 'Start or stop barcode scanning',
-      keys: ['Ctrl', 'Alt', 'S'],
-    },
-    {
-      icon: <Keyboard />,
-      title: 'Manual Input',
-      description: 'Open manual input window',
-      keys: ['Ctrl', 'Alt', 'M'],
-    },
-    {
-      icon: <Clock3 />,
-      title: 'Open History',
-      description: 'Open scan history',
-      keys: ['Ctrl', 'Alt', 'H'],
-    },
-    {
-      icon: <Settings />,
-      title: 'Open Settings',
-      description: 'Open settings window',
-      keys: ['Ctrl', ','],
-    },
-    {
-      icon: <HelpCircle />,
-      title: 'Open Help',
-      description: 'Open help and troubleshooting',
-      keys: ['F1'],
-    },
-  ]
-
-  const scanningShortcuts = [
-    {
-      icon: <Zap />,
-      title: 'Toggle Flashlight',
-      description: 'Turn camera flashlight on/off',
-      keys: ['F'],
-    },
-    {
-      icon: <Camera />,
-      title: 'Switch Camera',
-      description: 'Switch between front and back camera',
-      keys: ['C'],
-    },
-    {
-      icon: <ZoomIn />,
-      title: 'Zoom In',
-      description: 'Zoom in while scanning',
-      keys: ['+'],
-    },
-    {
-      icon: <ZoomOut />,
-      title: 'Zoom Out',
-      description: 'Zoom out while scanning',
-      keys: ['-'],
-    },
-  ]
-
-  const typingShortcuts = [
-    {
-      icon: <Eraser />,
-      title: 'Clear Typed Text',
-      description: 'Clear the last typed text',
-      keys: ['Esc'],
-    },
-    {
-      icon: <CornerDownLeft />,
-      title: 'Delete Last Character',
-      description: 'Delete the last typed character',
-      keys: ['Backspace'],
-    },
-    {
-      icon: <Pause />,
-      title: 'Pause / Resume Typing',
-      description: 'Pause or resume auto typing',
-      keys: ['Ctrl', 'Alt', 'P'],
-    },
-  ]
-
-  return (
-    <div className="scanner-content shortcuts-content">
-      <header className="scanner-header shortcuts-header">
-        <button className="hamburger" type="button" aria-label="Menu">
-          <Menu size={41} strokeWidth={2.5} />
-        </button>
-        <h1>Keyboard Shortcuts</h1>
-        <button className="restore-button" type="button">
-          <RotateCcw size={27} strokeWidth={2.3} />
-          <span>Restore Defaults</span>
-        </button>
-      </header>
-
-      <DesktopStatusPill connection={connection} className="shortcuts-status" />
-
-      <ShortcutGroup title="Global Shortcuts" shortcuts={globalShortcuts} />
-      <ShortcutGroup title="Scanning Shortcuts" shortcuts={scanningShortcuts} />
-      <ShortcutGroup title="Typing Shortcuts" shortcuts={typingShortcuts} compact />
-
-      <section className="shortcuts-tip-card">
-        <Info size={34} strokeWidth={2.3} />
-        <div>
-          <strong>Tip</strong>
-          <p>You can click the edit icon ( <SquarePen size={24} strokeWidth={2.1} /> ) next to any shortcut to customize it.</p>
         </div>
       </section>
     </div>
@@ -760,44 +535,6 @@ function CertificateNotice({ connection }: { connection: DesktopConnection }) {
   )
 }
 
-function ShortcutGroup({
-  title,
-  shortcuts,
-  compact = false,
-}: {
-  title: string
-  shortcuts: Array<{ icon: JSX.Element; title: string; description: string; keys: string[] }>
-  compact?: boolean
-}) {
-  return (
-    <section className={`shortcut-section ${compact ? 'compact' : ''}`}>
-      <h2>{title}</h2>
-      <div className="shortcut-card">
-        {shortcuts.map((shortcut) => (
-          <div className="shortcut-row" key={shortcut.title}>
-            <span className="shortcut-icon">{shortcut.icon}</span>
-            <div className="shortcut-copy">
-              <strong>{shortcut.title}</strong>
-              <p>{shortcut.description}</p>
-            </div>
-            <div className="shortcut-keys">
-              {shortcut.keys.map((key, index) => (
-                <span className="key-combo" key={`${shortcut.title}-${key}-${index}`}>
-                  {index > 0 && <em>+</em>}
-                  <kbd>{key}</kbd>
-                </span>
-              ))}
-            </div>
-            <button className="shortcut-edit" type="button" aria-label={`Edit ${shortcut.title}`}>
-              <SquarePen size={27} strokeWidth={2.2} />
-            </button>
-          </div>
-        ))}
-      </div>
-    </section>
-  )
-}
-
 function MobileTabs({
   page,
   setPage,
@@ -806,10 +543,9 @@ function MobileTabs({
   setPage: (page: MobilePage) => void
 }) {
   const tabs = [
-    { page: 'connect' as const, label: 'Connect', icon: <Link2 size={35} strokeWidth={2.6} /> },
     { page: 'scanner' as const, label: 'Scanner', icon: <ScanLine size={34} strokeWidth={2.2} /> },
     { page: 'manual' as const, label: 'Manual', icon: <Edit3 size={34} strokeWidth={2.3} /> },
-    { page: 'shortcuts' as const, label: 'Shortcuts', icon: <Keyboard size={34} strokeWidth={2.3} /> },
+    { page: 'connect' as const, label: 'Connect', icon: <Link2 size={35} strokeWidth={2.6} /> },
   ]
 
   return (
@@ -826,29 +562,6 @@ function MobileTabs({
         </button>
       ))}
     </nav>
-  )
-}
-
-function DesktopQrIllustration() {
-  return (
-    <div className="desktop-qr-art" aria-hidden="true">
-      <div className="laptop-art">
-        <div className="laptop-screen">
-          <div className="tiny-qr">
-            {Array.from({ length: 25 }, (_, index) => (
-              <span key={index} />
-            ))}
-          </div>
-        </div>
-        <div className="laptop-base" />
-      </div>
-      <div className="hand-phone">
-        <span className="hand" />
-        <span className="phone-art">
-          <ScanLine size={31} strokeWidth={2.5} />
-        </span>
-      </div>
-    </div>
   )
 }
 

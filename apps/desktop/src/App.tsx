@@ -42,7 +42,13 @@ import {
   Wifi,
   X,
 } from 'lucide-react'
-import type { DesktopConnectInfo, DesktopScanRecord, DesktopScanStatus } from './shared/desktop-api'
+import type {
+  DesktopConnectInfo,
+  DesktopScanRecord,
+  DesktopScanStatus,
+  DesktopTypingSettings,
+  DesktopTypingSuffix,
+} from './shared/desktop-api'
 
 const fallbackScannerUrl = 'https://192.168.1.10:8787/scan?token=ABC123'
 const fallbackConnectInfo: DesktopConnectInfo = {
@@ -58,13 +64,40 @@ const fallbackConnectInfo: DesktopConnectInfo = {
   tokenPreview: 'ABC...123',
   connectedClients: 0,
 }
+const fallbackTypingSettings: DesktopTypingSettings = {
+  autoEnter: true,
+  autoTab: false,
+  suffix: 'enter',
+  typingDelayMs: 80,
+}
 
-type Page = 'home' | 'history' | 'settings' | 'help'
+type Page = 'home' | 'history' | 'settings'
+type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
+
+function normalizeTypingSettings(settings: DesktopTypingSettings): DesktopTypingSettings {
+  const suffix: DesktopTypingSuffix = settings.autoTab
+    ? 'tab'
+    : settings.autoEnter
+      ? 'enter'
+      : settings.suffix
+  const typingDelayMs = Number.isFinite(settings.typingDelayMs)
+    ? Math.max(0, Math.min(1000, Math.round(settings.typingDelayMs)))
+    : fallbackTypingSettings.typingDelayMs
+
+  return {
+    autoEnter: suffix === 'enter',
+    autoTab: suffix === 'tab',
+    suffix,
+    typingDelayMs,
+  }
+}
 
 function App() {
   const [page, setPage] = useState<Page>('home')
   const [connectInfo, setConnectInfo] = useState<DesktopConnectInfo>(fallbackConnectInfo)
   const [scanHistory, setScanHistory] = useState<DesktopScanRecord[]>([])
+  const [typingSettings, setTypingSettings] = useState<DesktopTypingSettings>(fallbackTypingSettings)
+  const [settingsSaveState, setSettingsSaveState] = useState<SettingsSaveState>('idle')
 
   useEffect(() => {
     const api = window.phoneScan
@@ -95,6 +128,12 @@ function App() {
     api.getScanHistory().then((rows) => {
       if (mounted) {
         setScanHistory(rows)
+      }
+    })
+
+    api.getSettings().then((settings) => {
+      if (mounted) {
+        setTypingSettings(settings)
       }
     })
 
@@ -138,6 +177,33 @@ function App() {
       window.open(connectInfo.scannerUrl, '_blank', 'noopener,noreferrer')
     }
   }
+  const minimizeWindow = () => {
+    void window.phoneScan?.minimizeWindow()
+  }
+  const toggleMaximizeWindow = () => {
+    void window.phoneScan?.toggleMaximizeWindow()
+  }
+  const closeWindow = () => {
+    if (window.phoneScan) {
+      void window.phoneScan.closeWindow()
+      return
+    }
+
+    window.close()
+  }
+  const updateTypingSettings = async (nextSettings: DesktopTypingSettings) => {
+    const normalized = normalizeTypingSettings(nextSettings)
+    setTypingSettings(normalized)
+    setSettingsSaveState('saving')
+
+    try {
+      const savedSettings = await window.phoneScan?.updateSettings(normalized)
+      setTypingSettings(savedSettings ?? normalized)
+      setSettingsSaveState('saved')
+    } catch {
+      setSettingsSaveState('error')
+    }
+  }
 
   useEffect(() => {
     if (connectInfo.qrDataUrl || !connectInfo.scannerUrl) {
@@ -159,7 +225,7 @@ function App() {
 
   return (
     <main className="desktop-stage">
-      <section className={`desktop-window ${page === 'settings' ? 'settings-window' : ''}`} aria-label="Phone Scan Desktop">
+      <section className="desktop-window" aria-label="Phone Scan Desktop">
         <div className="titlebar">
           <div className="titlebar-left">
             <div className="app-mark small">
@@ -168,33 +234,22 @@ function App() {
             <span>Phone Scan</span>
           </div>
           <div className="window-controls" aria-hidden="true">
-            <button type="button">
+            <button type="button" onClick={minimizeWindow}>
               <Minus size={17} />
             </button>
-            <button type="button">
+            <button type="button" onClick={toggleMaximizeWindow}>
               <Square size={15} />
             </button>
-            <button type="button">
+            <button type="button" onClick={closeWindow}>
               <X size={18} />
             </button>
           </div>
         </div>
 
-        <div className={`app-shell ${page === 'history' || page === 'help' ? 'history-shell' : ''}`}>
-          <aside
-            className={`sidebar ${page === 'history' || page === 'settings' || page === 'help' ? 'with-device' : ''} ${
-              page === 'settings' ? 'settings-sidebar' : ''
-            }`}
-            aria-label="Main navigation"
-          >
+        <div className="app-shell">
+          <aside className="sidebar" aria-label="Main navigation">
             <div className="sidebar-logo">
               <ScanBarcode size={66} strokeWidth={1.9} />
-              {page === 'settings' && (
-                <div className="sidebar-brand-text">
-                  <strong>Phone Scan</strong>
-                  <strong>Desktop</strong>
-                </div>
-              )}
             </div>
 
             <nav className="nav-list">
@@ -204,7 +259,7 @@ function App() {
                 onClick={() => setPage('home')}
               >
                 <Home size={26} fill={page === 'home' ? 'currentColor' : 'none'} strokeWidth={2.2} />
-                <span>{page === 'settings' ? 'Connect' : 'Home'}</span>
+                <span>Home</span>
               </button>
               <button
                 className={`nav-item ${page === 'history' ? 'active' : ''}`}
@@ -227,51 +282,23 @@ function App() {
                 <Settings size={27} strokeWidth={2.2} />
                 <span>Settings</span>
               </button>
-              <button
-                className={`nav-item ${page === 'help' ? 'active' : ''}`}
-                type="button"
-                onClick={() => setPage('help')}
-              >
-                <CircleHelp
-                  size={27}
-                  fill={page === 'help' ? 'currentColor' : 'none'}
-                  stroke={page === 'help' ? '#ffffff' : 'currentColor'}
-                  strokeWidth={2.2}
-                />
-                <span>Help</span>
-              </button>
             </nav>
-
-            {(page === 'history' || page === 'settings' || page === 'help') && (
-              <section className="connected-device-card" aria-label="Connected phone">
-                <div className="connected-status">
-                  <span />
-                  <strong>{connectInfo.connectedClients > 0 ? 'Connected' : 'Waiting'}</strong>
-                </div>
-                <div className="connected-device">
-                  <Smartphone size={30} strokeWidth={1.9} />
-                  <p>
-                    {connectInfo.connectedClients > 0 ? `${connectInfo.connectedClients} phone connected` : 'No phone connected'}
-                    <br />
-                    {connectInfo.ipAddress}:{connectInfo.port}
-                  </p>
-                </div>
-              </section>
-            )}
 
             <div className="version">
               <span className="version-dot" />
               <span>v1.0.0</span>
-              {page === 'settings' && <strong className="update-badge">Up to date</strong>}
             </div>
           </aside>
 
           {page === 'history' ? (
             <HistoryScreen rows={scanHistory} />
           ) : page === 'settings' ? (
-            <SettingsScreen />
-          ) : page === 'help' ? (
-            <HelpScreen />
+            <SettingsScreen
+              connectInfo={connectInfo}
+              saveState={settingsSaveState}
+              settings={typingSettings}
+              onUpdateSettings={updateTypingSettings}
+            />
           ) : (
             <HomeScreen
               connectInfo={connectInfo}
@@ -416,36 +443,20 @@ function HistoryScreen({ rows }: { rows: DesktopScanRecord[] }) {
         <header className="history-header">
           <div>
             <h1>Scan History</h1>
-            <p>All barcodes scanned from your phone</p>
+            <p>Latest barcodes received from the phone scanner.</p>
           </div>
 
-          <div className="history-actions">
-            <button className="toolbar-button clear-button" type="button">
-              <Trash2 size={25} strokeWidth={2.2} />
-              <span>Clear All</span>
-            </button>
-            <button className="toolbar-button export-button" type="button">
-              <Download size={26} strokeWidth={2.2} />
-              <span>Export CSV</span>
-            </button>
-          </div>
-        </header>
-
-        <div className="history-tools">
-          <label className="search-box" aria-label="Search barcode">
-            <Search size={26} strokeWidth={1.9} />
-            <input type="search" placeholder="Search barcode..." />
-          </label>
           <span className="total-count">Total: {rows.length}</span>
-        </div>
+        </header>
 
         <section className="history-table-card">
           <div className="history-table table-head">
             <span>#</span>
             <span>Barcode</span>
+            <span>Type</span>
             <span>Time</span>
             <span>Status</span>
-            <span>Action</span>
+            <span>Copy</span>
           </div>
 
           {rows.length === 0 && <div className="empty-history-row">No scans yet</div>}
@@ -455,46 +466,19 @@ function HistoryScreen({ rows }: { rows: DesktopScanRecord[] }) {
               <span className="row-index">{index + 1}</span>
               <span className="barcode-cell">
                 <strong>{row.barcode}</strong>
-                <Copy size={21} strokeWidth={1.9} />
               </span>
+              <span className="type-cell">{row.type}</span>
               <span className="time-cell">{row.time}</span>
               <span>
                 <StatusBadge status={row.status} />
               </span>
               <span className="row-actions">
-                <button type="button" aria-label="Type barcode again">
-                  <Play size={24} strokeWidth={1.8} />
-                </button>
-                <button type="button" aria-label="Copy barcode">
+                <button type="button" aria-label="Copy barcode" onClick={() => navigator.clipboard?.writeText(row.barcode)}>
                   <Copy size={23} strokeWidth={1.8} />
-                </button>
-                <button type="button" aria-label="More actions">
-                  <MoreVertical size={24} strokeWidth={1.9} />
                 </button>
               </span>
             </div>
           ))}
-
-          <footer className="table-pagination">
-            <div className="pagination-pages">
-              <button className="pager muted" type="button" aria-label="Previous page">
-                <ChevronLeft size={23} />
-              </button>
-              <button className="pager active" type="button">1</button>
-              <button className="pager" type="button">2</button>
-              <button className="pager" type="button">3</button>
-              <span>...</span>
-              <button className="pager" type="button">4</button>
-              <button className="pager" type="button" aria-label="Next page">
-                <ChevronRight size={23} />
-              </button>
-            </div>
-
-            <button className="page-size" type="button">
-              <span>10 / page</span>
-              <ChevronDown size={22} />
-            </button>
-          </footer>
         </section>
       </div>
     </section>
@@ -512,81 +496,83 @@ function StatusBadge({ status }: { status: DesktopScanStatus }) {
   )
 }
 
-function SettingsScreen() {
+function SettingsScreen({
+  connectInfo,
+  saveState,
+  settings,
+  onUpdateSettings,
+}: {
+  connectInfo: DesktopConnectInfo
+  saveState: SettingsSaveState
+  settings: DesktopTypingSettings
+  onUpdateSettings: (settings: DesktopTypingSettings) => void
+}) {
+  const setSuffix = (suffix: DesktopTypingSuffix) => {
+    onUpdateSettings({
+      ...settings,
+      autoEnter: suffix === 'enter',
+      autoTab: suffix === 'tab',
+      suffix,
+    })
+  }
+
   return (
     <section className="content-panel settings-panel">
       <div className="settings-content">
         <header className="settings-header">
-          <h1>Settings</h1>
-          <p>Customize how the app works</p>
+          <div>
+            <h1>Settings</h1>
+            <p>Control how scanned barcode data is typed into the focused input.</p>
+          </div>
+          <span className={`settings-save-state ${saveState}`}>{saveState === 'idle' ? 'Ready' : saveState}</span>
         </header>
 
         <div className="settings-grid">
           <section className="settings-card typing-card">
-            <CardTitle icon={<Keyboard size={25} />} title="Typing Options" />
-            <SettingsRow title="Auto Enter" description="Automatically press Enter after typing">
-              <Toggle checked />
+            <CardTitle icon={<Keyboard size={25} />} title="Typing Behavior" />
+            <SettingsRow title="Auto Enter" description="Press Enter after each barcode is typed">
+              <Toggle checked={settings.autoEnter} onChange={(checked) => setSuffix(checked ? 'enter' : 'none')} />
             </SettingsRow>
-            <SettingsRow title="Auto Tab" description="Automatically press Tab after typing">
-              <Toggle />
+            <SettingsRow title="Auto Tab" description="Tab is disabled while Auto Enter is active">
+              <Toggle checked={settings.autoTab} onChange={(checked) => setSuffix(checked ? 'tab' : 'none')} />
             </SettingsRow>
-            <SettingsRow title="Suffix" description="Add suffix after typing">
-              <SelectButton value="Enter" />
+            <SettingsRow title="Suffix" description="Choose what key is pressed after typing">
+              <SuffixSelect value={settings.suffix} onChange={setSuffix} />
             </SettingsRow>
-            <SettingsRow title="Prefix" description="Add prefix before typing">
-              <input className="settings-input prefix-input" value="Enter prefix (optional)" readOnly />
-            </SettingsRow>
-            <SettingsRow title="Typing Delay" description="Delay between keystrokes (ms)" last>
-              <NumberInput value="10" />
+            <SettingsRow title="Typing Delay" description="Delay before typing after barcode is received" last>
+              <DelayInput
+                value={settings.typingDelayMs}
+                onChange={(typingDelayMs) => onUpdateSettings({ ...settings, typingDelayMs })}
+              />
             </SettingsRow>
           </section>
 
           <div className="right-settings-column">
             <section className="settings-card connection-card">
-              <CardTitle icon={<Wifi size={25} />} title="Connection Settings" />
-              <SettingsRow title="Port" description="Local server port">
-                <NumberInput value="8787" wide />
+              <CardTitle icon={<Wifi size={25} />} title="Local Server" />
+              <SettingsRow title="Protocol" description="Local HTTPS is used so the phone camera can open">
+                <ReadOnlyValue value={connectInfo.protocol.toUpperCase()} />
               </SettingsRow>
-              <SettingsRow title="Start Server on Launch" description="Automatically start local server when app launches" last>
-                <Toggle checked />
+              <SettingsRow title="Port" description="Phone connects to this local desktop port">
+                <ReadOnlyValue value={String(connectInfo.port)} />
+              </SettingsRow>
+              <SettingsRow title="IP Address" description="Current local address shown in the QR code" last>
+                <ReadOnlyValue value={connectInfo.ipAddress} wide />
               </SettingsRow>
             </section>
 
             <section className="settings-card general-card">
-              <CardTitle icon={<Settings size={25} />} title="General" />
-              <SettingsRow title="Start with Windows" description="Run app automatically when Windows starts">
-                <Toggle />
+              <CardTitle icon={<ShieldCheck size={25} />} title="Connection Requirements" />
+              <SettingsRow title="Network" description="Phone and desktop must be on the same Wi-Fi or USB tethering">
+                <ReadOnlyValue value="Local only" wide />
               </SettingsRow>
-              <SettingsRow title="Minimize to Tray" description="Minimize app to system tray instead of closing">
-                <Toggle checked />
-              </SettingsRow>
-              <SettingsRow title="Theme" description="Choose app appearance" last>
-                <SelectButton value="Light" wide />
+              <SettingsRow title="Certificate" description="Install local certificate if phone camera is blocked" last>
+                <ReadOnlyValue value="HTTPS setup" wide />
               </SettingsRow>
             </section>
           </div>
         </div>
-
-        <section className="settings-card advanced-card">
-          <CardTitle icon={<Wrench size={25} />} title="Advanced" />
-          <div className="advanced-note">
-            <Info size={23} />
-            <span>Advanced options are for experienced users. Changing these settings may affect app behavior.</span>
-          </div>
-          <button className="advanced-button" type="button">
-            <span>Show Advanced Options</span>
-            <ChevronDown size={19} />
-          </button>
-        </section>
       </div>
-
-      <footer className="settings-footer">
-        <button className="reset-button" type="button">Reset to Default</button>
-        <button className="save-button" type="button">
-          <Save size={22} />
-          <span>Save Settings</span>
-        </button>
-      </footer>
     </section>
   )
 }
@@ -752,11 +738,39 @@ function SettingsRow({
   )
 }
 
-function Toggle({ checked = false }: { checked?: boolean }) {
+function ReadOnlyValue({ value, tone = 'neutral', wide = false }: { value: string; tone?: 'neutral' | 'green'; wide?: boolean }) {
+  return <span className={`readonly-value ${tone} ${wide ? 'wide' : ''}`}>{value}</span>
+}
+
+function Toggle({ checked = false, onChange }: { checked?: boolean; onChange?: (checked: boolean) => void }) {
   return (
-    <span className={`toggle ${checked ? 'checked' : ''}`} aria-hidden="true">
+    <button className={`toggle ${checked ? 'checked' : ''}`} type="button" aria-pressed={checked} onClick={() => onChange?.(!checked)}>
       <span />
-    </span>
+    </button>
+  )
+}
+
+function SuffixSelect({ value, onChange }: { value: DesktopTypingSuffix; onChange: (value: DesktopTypingSuffix) => void }) {
+  return (
+    <select className="settings-select" value={value} onChange={(event) => onChange(event.target.value as DesktopTypingSuffix)}>
+      <option value="none">None</option>
+      <option value="enter">Enter</option>
+      <option value="tab">Tab</option>
+    </select>
+  )
+}
+
+function DelayInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  return (
+    <input
+      className="settings-input delay-input"
+      max={1000}
+      min={0}
+      step={10}
+      type="number"
+      value={value}
+      onChange={(event) => onChange(Number(event.target.value))}
+    />
   )
 }
 

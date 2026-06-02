@@ -27,11 +27,25 @@ export type DesktopScanRecord = {
   error?: string
 }
 
+export type DesktopTypingSuffix = 'none' | 'enter' | 'tab'
+
+export type DesktopTypingSettings = {
+  autoEnter: boolean
+  autoTab: boolean
+  suffix: DesktopTypingSuffix
+  typingDelayMs: number
+}
+
 export type DesktopApi = {
   getConnectInfo: () => Promise<DesktopConnectInfo>
   refreshConnectInfo: () => Promise<DesktopConnectInfo>
   getScanHistory: () => Promise<DesktopScanRecord[]>
+  getSettings: () => Promise<DesktopTypingSettings>
+  updateSettings: (settings: DesktopTypingSettings) => Promise<DesktopTypingSettings>
   openScannerPage: () => Promise<void>
+  minimizeWindow: () => Promise<void>
+  toggleMaximizeWindow: () => Promise<void>
+  closeWindow: () => Promise<void>
   onConnectInfoChanged: (callback: (info: DesktopConnectInfo) => void) => () => void
   onScanReceived: (callback: (record: DesktopScanRecord) => void) => () => void
 }

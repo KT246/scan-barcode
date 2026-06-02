@@ -3,14 +3,20 @@ import path from 'node:path'
 import crypto from 'node:crypto'
 import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
-import { app, BrowserWindow, ipcMain, shell, type BrowserWindow as ElectronBrowserWindow } from 'electron'
-import type { DesktopConnectInfo, DesktopScanRecord } from '../shared/desktop-api'
+import { app, BrowserWindow, Menu, ipcMain, shell, type BrowserWindow as ElectronBrowserWindow } from 'electron'
+import type { DesktopConnectInfo, DesktopScanRecord, DesktopTypingSettings, DesktopTypingSuffix } from '../shared/desktop-api'
 import { typeIntoFocusedWindow } from './keyboard'
 import { startScannerServer, type ScannerServerHandle } from './scanner-server'
 
 const desktopRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(desktopRoot, '../..')
 const bootLogPath = path.join(os.tmpdir(), 'phone-scan-main.log')
+const defaultTypingSettings: DesktopTypingSettings = {
+  autoEnter: true,
+  autoTab: false,
+  suffix: 'enter',
+  typingDelayMs: 80,
+}
 
 function writeBootLog(message: string, error?: unknown) {
   const detail = error instanceof Error ? `${error.stack ?? error.message}` : error ? String(error) : ''
@@ -32,6 +38,7 @@ process.on('unhandledRejection', (error) => {
 
 let mainWindow: ElectronBrowserWindow | null = null
 let server: ScannerServerHandle | null = null
+let typingSettings: DesktopTypingSettings = defaultTypingSettings
 let connectInfo: DesktopConnectInfo = {
   status: 'starting',
   computerName: os.hostname(),
@@ -46,6 +53,50 @@ let connectInfo: DesktopConnectInfo = {
   connectedClients: 0,
 }
 const scanHistory: DesktopScanRecord[] = []
+
+function resolveSettingsPath() {
+  return path.join(app.getPath('userData'), 'settings.json')
+}
+
+function normalizeSuffix(value: unknown): DesktopTypingSuffix {
+  if (value === 'tab' || value === 'none' || value === 'enter') {
+    return value
+  }
+
+  return 'enter'
+}
+
+function normalizeTypingSettings(value: Partial<DesktopTypingSettings> | null | undefined): DesktopTypingSettings {
+  const requestedSuffix = normalizeSuffix(value?.suffix)
+  const suffix: DesktopTypingSuffix = value?.autoTab ? 'tab' : value?.autoEnter ? 'enter' : requestedSuffix
+  const safeDelay = Number.isFinite(value?.typingDelayMs)
+    ? Math.max(0, Math.min(1000, Math.round(Number(value?.typingDelayMs))))
+    : defaultTypingSettings.typingDelayMs
+
+  return {
+    autoEnter: suffix === 'enter',
+    autoTab: suffix === 'tab',
+    suffix,
+    typingDelayMs: safeDelay,
+  }
+}
+
+async function loadTypingSettings() {
+  try {
+    const raw = await fs.promises.readFile(resolveSettingsPath(), 'utf8')
+    return normalizeTypingSettings(JSON.parse(raw) as Partial<DesktopTypingSettings>)
+  } catch {
+    return defaultTypingSettings
+  }
+}
+
+async function saveTypingSettings(nextSettings: DesktopTypingSettings) {
+  typingSettings = normalizeTypingSettings(nextSettings)
+  await fs.promises.mkdir(path.dirname(resolveSettingsPath()), { recursive: true })
+  await fs.promises.writeFile(resolveSettingsPath(), `${JSON.stringify(typingSettings, null, 2)}\n`, 'utf8')
+
+  return typingSettings
+}
 
 function resolvePreloadPath() {
   return path.join(desktopRoot, 'dist-electron', 'preload', 'index.cjs')
@@ -85,7 +136,10 @@ function formatScanTime(timestamp: number) {
 }
 
 async function handleIncomingScan(payload: { value: string; type: 'barcode' | 'qr' | 'manual'; timestamp: number }) {
-  const typingResult = await typeIntoFocusedWindow(payload.value, { autoEnter: true })
+  const typingResult = await typeIntoFocusedWindow(payload.value, {
+    suffix: typingSettings.suffix,
+    typingDelayMs: typingSettings.typingDelayMs,
+  })
   const record: DesktopScanRecord = {
     id: `${payload.timestamp}-${crypto.randomUUID()}`,
     barcode: payload.value,
@@ -127,11 +181,13 @@ async function startLocalServer() {
 async function createMainWindow() {
   writeBootLog('creating main window')
   mainWindow = new BrowserWindow({
-    width: 1420,
-    height: 1030,
-    minWidth: 1180,
-    minHeight: 850,
+    width: 1280,
+    height: 820,
+    minWidth: 980,
+    minHeight: 680,
     show: false,
+    frame: false,
+    autoHideMenuBar: true,
     title: 'Phone Scan',
     backgroundColor: '#edf1f6',
     webPreferences: {
@@ -162,14 +218,38 @@ ipcMain.handle('phoneScan:refreshConnectInfo', async () => {
   return server.refreshToken()
 })
 ipcMain.handle('phoneScan:getScanHistory', () => scanHistory)
+ipcMain.handle('phoneScan:getSettings', () => typingSettings)
+ipcMain.handle('phoneScan:updateSettings', async (_event, settings: DesktopTypingSettings) => saveTypingSettings(settings))
 ipcMain.handle('phoneScan:openScannerPage', async () => {
   if (connectInfo.scannerUrl) {
     await shell.openExternal(connectInfo.scannerUrl)
   }
 })
+ipcMain.handle('phoneScan:minimizeWindow', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.minimize()
+})
+ipcMain.handle('phoneScan:toggleMaximizeWindow', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+
+  if (!window) {
+    return
+  }
+
+  if (window.isMaximized()) {
+    window.unmaximize()
+    return
+  }
+
+  window.maximize()
+})
+ipcMain.handle('phoneScan:closeWindow', (event) => {
+  BrowserWindow.fromWebContents(event.sender)?.close()
+})
 
 app.whenReady().then(async () => {
   writeBootLog(`app ready packaged=${app.isPackaged}`)
+  Menu.setApplicationMenu(null)
+  typingSettings = await loadTypingSettings()
   await startLocalServer()
   await createMainWindow()
 })
