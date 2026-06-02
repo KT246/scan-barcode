@@ -699,6 +699,95 @@ a {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
 }
 
+.desktop-flow-card {
+  min-height: 176px;
+  padding: 18px;
+}
+
+.desktop-flow-card .section-title {
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.desktop-flow-card .section-title h2 {
+  font-size: 17px;
+}
+
+.flow-status-list {
+  display: grid;
+  gap: 9px;
+}
+
+.flow-status-row {
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e1e8f1;
+  border-radius: 8px;
+  background: #fbfdff;
+}
+
+.flow-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #9aa6b8;
+}
+
+.flow-status-row.good .flow-dot {
+  background: #0ab84e;
+}
+
+.flow-status-row.bad .flow-dot {
+  background: #f59e0b;
+}
+
+.flow-status-row strong {
+  display: block;
+  margin-bottom: 3px;
+  color: #111827;
+  font-size: 13px;
+  font-weight: 720;
+}
+
+.flow-status-row p {
+  margin: 0;
+  overflow: hidden;
+  color: #53617d;
+  font-size: 12px;
+  font-weight: 430;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.flow-status-row em {
+  min-width: 72px;
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #53617d;
+  background: #f1f5f9;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 720;
+}
+
+.flow-status-row.good em {
+  color: #078a32;
+  background: #e6f8ed;
+}
+
+.flow-status-row.bad em {
+  color: #b45309;
+  background: #fff4dd;
+}
+
 .phone-card {
   min-height: 410px;
   height: auto;

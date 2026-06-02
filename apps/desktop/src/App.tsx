@@ -302,6 +302,7 @@ function App() {
           ) : (
             <HomeScreen
               connectInfo={connectInfo}
+              latestScan={scanHistory[0] ?? null}
               onCopyScannerUrl={copyScannerUrl}
               onOpenScannerPage={openScannerPage}
               onRefreshConnectInfo={refreshConnectInfo}
@@ -315,11 +316,13 @@ function App() {
 
 function HomeScreen({
   connectInfo,
+  latestScan,
   onCopyScannerUrl,
   onOpenScannerPage,
   onRefreshConnectInfo,
 }: {
   connectInfo: DesktopConnectInfo
+  latestScan: DesktopScanRecord | null
   onCopyScannerUrl: () => void
   onOpenScannerPage: () => void
   onRefreshConnectInfo: () => void
@@ -403,6 +406,8 @@ function HomeScreen({
                 <span>Open Scanner Page</span>
               </button>
             </section>
+
+            <DesktopFlowCard connectInfo={connectInfo} latestScan={latestScan} />
           </div>
 
           <section className="card phone-card">
@@ -433,6 +438,71 @@ function HomeScreen({
         <span>No cloud server. No login. Local connection only.</span>
       </footer>
     </section>
+  )
+}
+
+function DesktopFlowCard({
+  connectInfo,
+  latestScan,
+}: {
+  connectInfo: DesktopConnectInfo
+  latestScan: DesktopScanRecord | null
+}) {
+  const hasPhone = connectInfo.connectedClients > 0
+  const typed = latestScan?.status === 'Typed'
+  const typingFailed = latestScan?.status === 'Failed'
+
+  return (
+    <section className="card desktop-flow-card">
+      <div className="section-title">
+        <ScanBarcode size={25} />
+        <h2>Live Flow</h2>
+      </div>
+
+      <div className="flow-status-list">
+        <FlowStatusRow
+          label="Phone connected"
+          status={hasPhone ? 'Connected' : 'Waiting'}
+          tone={hasPhone ? 'good' : 'neutral'}
+          detail={hasPhone ? `${connectInfo.connectedClients} phone online` : 'Scan the QR from your phone'}
+        />
+        <FlowStatusRow
+          label="Barcode received"
+          status={latestScan ? 'Received' : 'Waiting'}
+          tone={latestScan ? 'good' : 'neutral'}
+          detail={latestScan ? latestScan.barcode : 'No barcode received yet'}
+        />
+        <FlowStatusRow
+          label="Typed result"
+          status={typed ? 'Typed' : typingFailed ? 'Failed' : 'Waiting'}
+          tone={typed ? 'good' : typingFailed ? 'bad' : 'neutral'}
+          detail={latestScan?.error ?? (typed ? 'Typed into focused input' : 'Click a target input before scanning')}
+        />
+      </div>
+    </section>
+  )
+}
+
+function FlowStatusRow({
+  label,
+  status,
+  detail,
+  tone,
+}: {
+  label: string
+  status: string
+  detail: string
+  tone: 'good' | 'bad' | 'neutral'
+}) {
+  return (
+    <div className={`flow-status-row ${tone}`}>
+      <span className="flow-dot" />
+      <div>
+        <strong>{label}</strong>
+        <p>{detail}</p>
+      </div>
+      <em>{status}</em>
+    </div>
   )
 }
 

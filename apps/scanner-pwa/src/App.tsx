@@ -37,7 +37,32 @@ type LastScan = {
   time: string
 }
 
-type SendBarcode = (value: string, type: LastScan['type']) => Promise<boolean>
+type LastSendState = 'idle' | 'sending' | 'received' | 'typed' | 'failed'
+
+type LastSend = {
+  state: LastSendState
+  message: string
+  detail?: string
+  via?: 'socket' | 'http'
+  time?: string
+}
+
+type SendResult = {
+  delivered: boolean
+  typed: boolean
+  via?: LastSend['via']
+  error?: string
+}
+
+type SendBarcode = (value: string, type: LastScan['type'], timestamp?: number) => Promise<SendResult>
+
+function formatScanTime(timestamp: number) {
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(timestamp))
+}
 
 function getInitialConnection(): DesktopConnection {
   const url = new URL(window.location.href)
@@ -62,6 +87,10 @@ function App() {
   const [connection, setConnection] = useState<DesktopConnection>(() => getInitialConnection())
   const [page, setPage] = useState<MobilePage>(() => (connection.token ? 'scanner' : 'connect'))
   const [lastScan, setLastScan] = useState<LastScan | null>(null)
+  const [lastSend, setLastSend] = useState<LastSend>({
+    state: 'idle',
+    message: 'No barcode sent yet.',
+  })
   const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
@@ -116,72 +145,152 @@ function App() {
     }
   }, [connection.serverUrl, connection.token])
 
-  const sendBarcode: SendBarcode = async (value, type) => {
+  const recordLocalScan = (value: string, type: LastScan['type'], timestamp = Date.now()) => {
+    const barcode = value.trim()
+
+    if (!barcode) {
+      return null
+    }
+
+    const scan: LastScan = {
+      value: barcode,
+      type,
+      time: formatScanTime(timestamp),
+    }
+
+    setLastScan(scan)
+    return scan
+  }
+
+  const updateSendStatus = (next: LastSend) => {
+    setLastSend({
+      ...next,
+      time: next.time ?? formatScanTime(Date.now()),
+    })
+  }
+
+  const sendBarcode: SendBarcode = async (value, type, timestamp = Date.now()) => {
     const barcode = value.trim()
 
     if (!barcode || !connection.token) {
-      return false
+      updateSendStatus({
+        state: 'failed',
+        message: !barcode ? 'No barcode value to send.' : 'Missing desktop token.',
+      })
+      return { delivered: false, typed: false, error: !barcode ? 'No barcode value to send.' : 'Missing desktop token.' }
+    }
+
+    if (!connection.connected) {
+      updateSendStatus({
+        state: 'failed',
+        message: 'Barcode scanned, but desktop is not connected.',
+        detail: 'Open Connect and scan the desktop QR again.',
+      })
+      return { delivered: false, typed: false, error: 'Desktop is not connected.' }
     }
 
     const payload = {
       token: connection.token,
       value: barcode,
       type,
-      timestamp: Date.now(),
+      timestamp,
     }
 
-    const sentBySocket = await new Promise<boolean>((resolve) => {
+    updateSendStatus({
+      state: 'sending',
+      message: 'Sending barcode to desktop...',
+    })
+
+    const socketResult = await new Promise<SendResult | null>((resolve) => {
       const socket = socketRef.current
 
       if (!socket?.connected) {
-        resolve(false)
+        resolve(null)
         return
       }
 
-      socket.timeout(5000).emit('barcode:scanned', payload, (error: Error | null, result?: { ok?: boolean }) => {
-        resolve(!error && result?.ok !== false)
+      socket.timeout(5000).emit('barcode:scanned', payload, (error: Error | null, result?: { ok?: boolean; error?: string }) => {
+        if (error) {
+          resolve(null)
+          return
+        }
+
+        resolve({
+          delivered: true,
+          typed: result?.ok !== false,
+          via: 'socket',
+          error: result?.error,
+        })
       })
     })
 
-    if (!sentBySocket) {
+    let result = socketResult
+
+    if (!result) {
       try {
         const response = await fetch(`${connection.serverUrl}/api/scan`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload),
         })
-        const result = (await response.json()) as { ok?: boolean }
+        const body = (await response.json()) as { ok?: boolean; error?: string }
 
-        if (result.ok === false) {
-          return false
+        if (!response.ok) {
+          result = { delivered: false, typed: false, via: 'http', error: body.error ?? response.statusText }
+        } else {
+          result = {
+            delivered: true,
+            typed: body.ok !== false,
+            via: 'http',
+            error: body.error,
+          }
         }
-      } catch {
-        return false
+      } catch (error) {
+        result = {
+          delivered: false,
+          typed: false,
+          error: error instanceof Error ? error.message : 'Network request failed.',
+        }
       }
     }
 
-    setLastScan({
-      value: barcode,
-      type,
-      time: new Intl.DateTimeFormat('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      }).format(new Date(payload.timestamp)),
+    updateSendStatus({
+      state: result.delivered ? (result.typed ? 'typed' : 'received') : 'failed',
+      message: result.delivered
+        ? result.typed
+          ? 'Desktop received and typed the barcode.'
+          : 'Desktop received the barcode, but typing failed.'
+        : 'Could not send barcode to desktop.',
+      detail: result.error,
+      via: result.via,
+      time: formatScanTime(timestamp),
     })
 
-    return true
+    return result
   }
 
   return (
     <main className="pwa-app" aria-label="Phone Scan PWA">
       <section className="app-screen">
         {page === 'scanner' ? (
-          <ScannerScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} setPage={setPage} />
+          <ScannerScreen
+            connection={connection}
+            lastScan={lastScan}
+            lastSend={lastSend}
+            recordLocalScan={recordLocalScan}
+            sendBarcode={sendBarcode}
+            setPage={setPage}
+          />
         ) : page === 'manual' ? (
-          <ManualScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} />
+          <ManualScreen
+            connection={connection}
+            lastScan={lastScan}
+            lastSend={lastSend}
+            recordLocalScan={recordLocalScan}
+            sendBarcode={sendBarcode}
+          />
         ) : (
-          <ConnectScreen connection={connection} setPage={setPage} />
+          <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} />
         )}
 
         <MobileTabs page={page} setPage={setPage} />
@@ -192,9 +301,13 @@ function App() {
 
 function ConnectScreen({
   connection,
+  lastScan,
+  lastSend,
   setPage,
 }: {
   connection: DesktopConnection
+  lastScan: LastScan | null
+  lastSend: LastSend
   setPage: (page: MobilePage) => void
 }) {
   return (
@@ -265,6 +378,8 @@ function ConnectScreen({
           <span>Open Scanner</span>
         </button>
       </section>
+
+      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} />
     </div>
   )
 }
@@ -272,11 +387,15 @@ function ConnectScreen({
 function ScannerScreen({
   connection,
   lastScan,
+  lastSend,
+  recordLocalScan,
   sendBarcode,
   setPage,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
+  lastSend: LastSend
+  recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
   sendBarcode: SendBarcode
   setPage: (page: MobilePage) => void
 }) {
@@ -326,11 +445,27 @@ function ScannerScreen({
           }
 
           const value = result.getText()
+          const timestamp = Date.now()
           controlsRef.current?.stop()
           controlsRef.current = null
           setScannerActive(false)
-          const delivered = await sendBarcode(value, 'barcode')
-          setScanMessage(delivered ? 'Barcode sent to desktop.' : 'Could not send barcode. Check desktop connection, firewall, or QR IP.')
+          recordLocalScan(value, 'barcode', timestamp)
+
+          if (!connection.connected) {
+            setScanMessage('Barcode scanned, but desktop is not connected.')
+            await sendBarcode(value, 'barcode', timestamp)
+            return
+          }
+
+          setScanMessage('Barcode scanned. Sending to desktop...')
+          const sendResult = await sendBarcode(value, 'barcode', timestamp)
+          setScanMessage(
+            sendResult.delivered
+              ? sendResult.typed
+                ? 'Desktop received and typed the barcode.'
+                : 'Desktop received it, but typing failed. Check focused input.'
+              : 'Could not send barcode. Check connection, firewall, or QR IP.',
+          )
         },
       )
     } catch (error) {
@@ -399,6 +534,8 @@ function ScannerScreen({
         </div>
       </section>
 
+      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
+
       <section className="scanner-controls">
         <button className="scan-control" type="button" onClick={toggleScanner}>
           <ScanLine size={59} strokeWidth={2.4} />
@@ -416,13 +553,28 @@ function ScannerScreen({
 function ManualScreen({
   connection,
   lastScan,
+  lastSend,
+  recordLocalScan,
   sendBarcode,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
+  lastSend: LastSend
+  recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
   sendBarcode: SendBarcode
 }) {
   const [manualValue, setManualValue] = useState(lastScan?.value ?? '')
+  const sendManualValue = async () => {
+    const timestamp = Date.now()
+    const scan = recordLocalScan(manualValue, 'manual', timestamp)
+
+    if (!scan) {
+      await sendBarcode(manualValue, 'manual', timestamp)
+      return
+    }
+
+    await sendBarcode(scan.value, 'manual', timestamp)
+  }
 
   return (
     <div className="scanner-content manual-content">
@@ -467,7 +619,7 @@ function ManualScreen({
           <span>{manualValue.trim().length} characters</span>
         </div>
 
-        <button className="manual-send-button" type="button" onClick={() => sendBarcode(manualValue, 'manual')}>
+        <button className="manual-send-button" type="button" onClick={sendManualValue}>
           <Send size={31} strokeWidth={2.4} />
           <span>Send</span>
         </button>
@@ -484,6 +636,8 @@ function ManualScreen({
           <span>Paste from Clipboard</span>
         </button>
       </section>
+
+      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
 
       <section className="manual-tip-card">
         <Info size={34} strokeWidth={2.3} />
@@ -532,6 +686,55 @@ function CertificateNotice({ connection }: { connection: DesktopConnection }) {
       </div>
       <a href={connection.trustUrl || connection.certificateUrl}>Setup</a>
     </section>
+  )
+}
+
+function ConnectionDiagnostics({
+  connection,
+  lastScan,
+  lastSend,
+  compact = false,
+}: {
+  connection: DesktopConnection
+  lastScan: LastScan | null
+  lastSend: LastSend
+  compact?: boolean
+}) {
+  return (
+    <section className={`diagnostics-card ${compact ? 'compact' : ''}`}>
+      <div className="diagnostics-title">
+        <span className={`diagnostics-dot ${connection.connected ? 'online' : 'offline'}`} />
+        <strong>Debug Status</strong>
+      </div>
+
+      <div className="diagnostics-grid">
+        <DiagnosticRow label="Server" value={connection.serverUrl} />
+        <DiagnosticRow label="Token" value={connection.token ? 'Exists' : 'Missing'} tone={connection.token ? 'good' : 'bad'} />
+        <DiagnosticRow label="Socket" value={connection.connected ? 'Connected' : 'Offline'} tone={connection.connected ? 'good' : 'bad'} />
+        <DiagnosticRow label="Last Scan" value={lastScan ? `${lastScan.value} (${lastScan.type})` : 'None'} />
+        <DiagnosticRow label="Last Send" value={lastSend.message} tone={lastSend.state === 'typed' || lastSend.state === 'received' ? 'good' : lastSend.state === 'failed' ? 'bad' : 'neutral'} />
+        <DiagnosticRow label="Typed Result" value={lastSend.state === 'typed' ? 'Typed' : lastSend.state === 'received' ? 'Received only' : lastSend.state === 'sending' ? 'Sending' : 'Not typed'} tone={lastSend.state === 'typed' ? 'good' : lastSend.state === 'received' || lastSend.state === 'failed' ? 'bad' : 'neutral'} />
+        {lastSend.detail && <DiagnosticRow label="Error" value={lastSend.detail} tone="bad" />}
+        {lastSend.via && <DiagnosticRow label="Channel" value={lastSend.via.toUpperCase()} />}
+      </div>
+    </section>
+  )
+}
+
+function DiagnosticRow({
+  label,
+  value,
+  tone = 'neutral',
+}: {
+  label: string
+  value: string
+  tone?: 'neutral' | 'good' | 'bad'
+}) {
+  return (
+    <div className={`diagnostic-row ${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
   )
 }
 
