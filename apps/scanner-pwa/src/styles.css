@@ -558,6 +558,57 @@ a {
   min-height: 178px;
 }
 
+.connect-qr-scanner-card {
+  margin-top: 20px;
+  padding: 30px 26px 26px;
+}
+
+.connect-qr-preview {
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+  border: 1px solid #dce4ef;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 50% 34%, rgba(33, 107, 255, 0.14), transparent 28%),
+    linear-gradient(180deg, #eef5ff 0%, #dbe7f6 100%);
+}
+
+.connect-qr-preview.has-video .camera-video {
+  opacity: 1;
+}
+
+.connect-qr-placeholder {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 28px;
+  color: var(--blue-dark);
+  text-align: center;
+}
+
+.connect-qr-placeholder strong {
+  color: var(--ink);
+  font-size: 24px;
+  font-weight: 760;
+}
+
+.connect-qr-placeholder span,
+.connect-scan-message {
+  color: #53617d;
+  font-size: 17px;
+  line-height: 1.4;
+}
+
+.connect-scan-message {
+  margin: 16px 0 0;
+}
+
 .mobile-card-title {
   display: flex;
   align-items: center;
@@ -616,6 +667,14 @@ a {
   width: 17px;
   height: 17px;
   border-radius: 50%;
+  background: #13b65b;
+}
+
+.green-dot.offline {
+  background: #fb3348;
+}
+
+.green-dot.online {
   background: #13b65b;
 }
 
@@ -919,6 +978,14 @@ a {
   width: 16px;
   height: 16px;
   border-radius: 50%;
+  background: #08b85a;
+}
+
+.connected-pill span.offline {
+  background: #9aa6b8;
+}
+
+.connected-pill span.online {
   background: #08b85a;
 }
 
@@ -1387,6 +1454,7 @@ a {
   font-size: 33px;
   font-weight: 760;
   line-height: 1.1;
+  overflow-wrap: anywhere;
 }
 
 .last-scanned time {
@@ -2374,6 +2442,7 @@ a {
 }
 
 .app-screen .status-card-mobile,
+.app-screen .connect-qr-scanner-card,
 .app-screen .how-card {
   min-height: 0;
   margin-top: 14px;
@@ -2387,6 +2456,34 @@ a {
 .app-screen .mobile-card-title {
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.app-screen .connect-qr-preview {
+  height: 190px;
+  border-radius: 14px;
+}
+
+.app-screen .connect-qr-placeholder {
+  gap: 8px;
+  padding: 22px;
+}
+
+.app-screen .connect-qr-placeholder svg {
+  width: 34px;
+  height: 34px;
+}
+
+.app-screen .connect-qr-placeholder strong {
+  font-size: 18px;
+}
+
+.app-screen .connect-qr-placeholder span,
+.app-screen .connect-scan-message {
+  font-size: 13px;
+}
+
+.app-screen .connect-scan-message {
+  margin-top: 12px;
 }
 
 .app-screen .not-connected-box {

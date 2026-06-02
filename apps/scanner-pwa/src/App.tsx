@@ -64,6 +64,18 @@ function formatScanTime(timestamp: number) {
   }).format(new Date(timestamp))
 }
 
+function getDesktopScannerUrl(value: string) {
+  try {
+    const url = new URL(value.trim())
+    const token = url.searchParams.get('token')
+    const scanPath = url.pathname === '/scan' || url.pathname.endsWith('/scan')
+
+    return token && scanPath ? url : null
+  } catch {
+    return null
+  }
+}
+
 function getInitialConnection(): DesktopConnection {
   const url = new URL(window.location.href)
   const serverUrl = url.searchParams.get('server') ?? window.location.origin
@@ -310,6 +322,75 @@ function ConnectScreen({
   lastSend: LastSend
   setPage: (page: MobilePage) => void
 }) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const controlsRef = useRef<IScannerControls | null>(null)
+  const [connectScannerActive, setConnectScannerActive] = useState(false)
+  const [connectScanMessage, setConnectScanMessage] = useState(
+    connection.connected ? 'Desktop is connected. You can open the barcode scanner.' : 'Scan the QR code shown in the desktop app.',
+  )
+  const cameraNeedsTrustedHttps = !window.isSecureContext
+
+  useEffect(() => {
+    return () => {
+      controlsRef.current?.stop()
+      controlsRef.current = null
+    }
+  }, [])
+
+  const stopConnectScanner = () => {
+    controlsRef.current?.stop()
+    controlsRef.current = null
+    setConnectScannerActive(false)
+  }
+
+  const toggleConnectScanner = async () => {
+    if (connectScannerActive) {
+      stopConnectScanner()
+      setConnectScanMessage('Connection QR scanner stopped.')
+      return
+    }
+
+    if (cameraNeedsTrustedHttps) {
+      setConnectScanMessage('Camera needs HTTPS. Open this page from HTTPS before scanning the desktop QR.')
+      return
+    }
+
+    try {
+      const reader = new BrowserMultiFormatReader()
+      setConnectScannerActive(true)
+      setConnectScanMessage('Scanning desktop connection QR...')
+      controlsRef.current = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: {
+              ideal: 'environment',
+            },
+          },
+        },
+        videoRef.current ?? undefined,
+        (result) => {
+          if (!result) {
+            return
+          }
+
+          const scannerUrl = getDesktopScannerUrl(result.getText())
+          stopConnectScanner()
+
+          if (!scannerUrl) {
+            setConnectScanMessage('This is not a Phone Scan desktop QR. Use the QR shown in the desktop app.')
+            return
+          }
+
+          setConnectScanMessage('Desktop QR detected. Opening local scanner...')
+          window.location.assign(scannerUrl.href)
+        },
+      )
+    } catch (error) {
+      setConnectScannerActive(false)
+      setConnectScanMessage(error instanceof Error ? error.message : 'Camera unavailable.')
+    }
+  }
+
   return (
     <div className="pwa-content">
       <header className="connect-header">
@@ -339,7 +420,7 @@ function ConnectScreen({
 
         <div className="not-connected-box">
           <div className="status-copy">
-            <span className="green-dot" />
+            <span className={`green-dot ${connection.connected ? 'online' : 'offline'}`} />
             <div>
               <strong>{connection.connected ? 'Connected' : 'Not Connected'}</strong>
               <p>
@@ -359,6 +440,31 @@ function ConnectScreen({
         </div>
       </section>
 
+      <section className="connect-card connect-qr-scanner-card">
+        <div className="mobile-card-title">
+          <span className="info-dot">QR</span>
+          <h2>Desktop QR Scanner</h2>
+        </div>
+
+        <div className={`connect-qr-preview ${connectScannerActive ? 'has-video' : ''}`}>
+          <video ref={videoRef} className="camera-video" muted playsInline />
+          {!connectScannerActive && (
+            <div className="connect-qr-placeholder">
+              <Link2 size={42} strokeWidth={2.5} />
+              <strong>Scan desktop QR here</strong>
+              <span>This scanner only connects the phone to Phone Scan Desktop.</span>
+            </div>
+          )}
+        </div>
+
+        <p className="connect-scan-message">{connectScanMessage}</p>
+
+        <button className="scan-button connect-open-scanner" type="button" onClick={toggleConnectScanner}>
+          <ScanLine size={30} strokeWidth={2.5} />
+          <span>{connectScannerActive ? 'Stop QR Scanner' : 'Scan Desktop QR'}</span>
+        </button>
+      </section>
+
       <section className="connect-card how-card compact-how-card">
         <div className="mobile-card-title">
           <span className="info-dot">i</span>
@@ -368,14 +474,14 @@ function ConnectScreen({
         <div className="how-body">
           <ol>
             <li><span>1</span><p>Keep phone and desktop on the same Wi-Fi or USB tethering.</p></li>
-            <li><span>2</span><p>Click the target input on desktop before scanning.</p></li>
-            <li><span>3</span><p>Use Scanner or Manual to send barcode data.</p></li>
+            <li><span>2</span><p>Scan the QR from Phone Scan Desktop on this Connect page.</p></li>
+            <li><span>3</span><p>After connected, use Scanner for product barcodes only.</p></li>
           </ol>
         </div>
 
         <button className="scan-button connect-open-scanner" type="button" onClick={() => setPage('scanner')}>
-          <ScanLine size={30} strokeWidth={2.5} />
-          <span>Open Scanner</span>
+          <Barcode size={30} strokeWidth={2.5} />
+          <span>Open Barcode Scanner</span>
         </button>
       </section>
 
@@ -445,10 +551,18 @@ function ScannerScreen({
           }
 
           const value = result.getText()
+          const scannerUrl = getDesktopScannerUrl(value)
           const timestamp = Date.now()
           controlsRef.current?.stop()
           controlsRef.current = null
           setScannerActive(false)
+
+          if (scannerUrl) {
+            setScanMessage('Desktop connection QR detected. Opening Connect link...')
+            window.location.assign(scannerUrl.href)
+            return
+          }
+
           recordLocalScan(value, 'barcode', timestamp)
 
           if (!connection.connected) {
@@ -482,7 +596,7 @@ function ScannerScreen({
         </button>
         <h1>Camera Scanner</h1>
         <button className="connected-pill" type="button">
-          <span />
+          <span className={connection.connected ? 'online' : 'offline'} />
           <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
           <i>⌄</i>
         </button>
@@ -584,7 +698,7 @@ function ManualScreen({
         </button>
         <h1>Manual Input</h1>
         <button className="connected-pill" type="button">
-          <span />
+          <span className={connection.connected ? 'online' : 'offline'} />
           <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
           <i>⌄</i>
         </button>
@@ -663,6 +777,8 @@ function DesktopStatusPill({
   connection: DesktopConnection
   className?: string
 }) {
+  const endpoint = connection.token ? `${connection.ipAddress}:${connection.port}` : 'No desktop QR scanned'
+
   return (
     <section className={`desktop-status-pill ${className}`}>
       <Monitor size={31} strokeWidth={2} />
@@ -671,7 +787,7 @@ function DesktopStatusPill({
       </span>
       <em />
       <Wifi size={31} strokeWidth={2.4} />
-      <strong>{connection.ipAddress}:{connection.port}</strong>
+      <strong>{endpoint}</strong>
     </section>
   )
 }
