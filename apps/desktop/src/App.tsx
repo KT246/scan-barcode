@@ -42,28 +42,106 @@ import {
   Wifi,
   X,
 } from 'lucide-react'
+import type { DesktopConnectInfo, DesktopScanRecord, DesktopScanStatus } from './shared/desktop-api'
 
-const scannerUrl = 'http://192.168.1.10:8787/scan?token=ABC123'
+const fallbackScannerUrl = 'http://192.168.1.10:8787/scan?token=ABC123'
+const fallbackConnectInfo: DesktopConnectInfo = {
+  status: 'starting',
+  computerName: 'DESKTOP',
+  ipAddress: '192.168.1.10',
+  port: 8787,
+  scannerUrl: fallbackScannerUrl,
+  qrDataUrl: '',
+  tokenPreview: 'ABC...123',
+  connectedClients: 0,
+}
 
 type Page = 'home' | 'history' | 'settings' | 'help'
 
-const historyRows = [
-  { id: 1, barcode: '8934678901234', time: '22/05/2024 10:24:35', status: 'Typed' },
-  { id: 2, barcode: '6901234567892', time: '22/05/2024 10:24:12', status: 'Typed' },
-  { id: 3, barcode: '1234567890123', time: '22/05/2024 10:23:45', status: 'Typed' },
-  { id: 4, barcode: '9786041234567', time: '22/05/2024 10:23:10', status: 'Typed' },
-  { id: 5, barcode: '8857123456789', time: '22/05/2024 10:22:33', status: 'Typed' },
-  { id: 6, barcode: '4902501234567', time: '22/05/2024 10:21:58', status: 'Failed' },
-  { id: 7, barcode: '8938501234567', time: '22/05/2024 10:21:20', status: 'Typed' },
-  { id: 8, barcode: '6909876543210', time: '22/05/2024 10:20:45', status: 'Typed' },
-]
-
 function App() {
-  const [page, setPage] = useState<Page>('help')
-  const [qrUrl, setQrUrl] = useState('')
+  const [page, setPage] = useState<Page>('home')
+  const [connectInfo, setConnectInfo] = useState<DesktopConnectInfo>(fallbackConnectInfo)
+  const [scanHistory, setScanHistory] = useState<DesktopScanRecord[]>([])
 
   useEffect(() => {
-    QRCode.toDataURL(scannerUrl, {
+    const api = window.phoneScan
+
+    if (!api) {
+      QRCode.toDataURL(fallbackScannerUrl, {
+        errorCorrectionLevel: 'M',
+        margin: 1,
+        scale: 12,
+        color: {
+          dark: '#050505',
+          light: '#ffffff',
+        },
+      }).then((qrDataUrl) => {
+        setConnectInfo((current) => ({ ...current, status: 'running', qrDataUrl }))
+      })
+      return
+    }
+
+    let mounted = true
+
+    api.getConnectInfo().then((info) => {
+      if (mounted) {
+        setConnectInfo(info)
+      }
+    })
+
+    api.getScanHistory().then((rows) => {
+      if (mounted) {
+        setScanHistory(rows)
+      }
+    })
+
+    const unsubscribeInfo = api.onConnectInfoChanged((info) => {
+      setConnectInfo(info)
+    })
+    const unsubscribeScan = api.onScanReceived((record) => {
+      setScanHistory((current) => [record, ...current.filter((row) => row.id !== record.id)].slice(0, 200))
+    })
+
+    return () => {
+      mounted = false
+      unsubscribeInfo()
+      unsubscribeScan()
+    }
+  }, [])
+
+  const refreshConnectInfo = async () => {
+    const info = await window.phoneScan?.refreshConnectInfo()
+
+    if (info) {
+      setConnectInfo(info)
+    }
+  }
+
+  const copyScannerUrl = async () => {
+    if (!connectInfo.scannerUrl) {
+      return
+    }
+
+    await navigator.clipboard?.writeText(connectInfo.scannerUrl)
+  }
+
+  const openScannerPage = async () => {
+    if (window.phoneScan) {
+      await window.phoneScan.openScannerPage()
+      return
+    }
+
+    if (connectInfo.scannerUrl) {
+      window.open(connectInfo.scannerUrl, '_blank', 'noopener,noreferrer')
+    }
+  }
+
+  useEffect(() => {
+    if (connectInfo.qrDataUrl || !connectInfo.scannerUrl) {
+      return
+    }
+
+    QRCode.toDataURL(connectInfo.scannerUrl, {
       errorCorrectionLevel: 'M',
       margin: 1,
       scale: 12,
@@ -71,18 +149,20 @@ function App() {
         dark: '#050505',
         light: '#ffffff',
       },
-    }).then(setQrUrl)
-  }, [])
+    }).then((qrDataUrl) => {
+      setConnectInfo((current) => ({ ...current, qrDataUrl }))
+    })
+  }, [connectInfo.qrDataUrl, connectInfo.scannerUrl])
 
   return (
     <main className="desktop-stage">
-      <section className={`desktop-window ${page === 'settings' ? 'settings-window' : ''}`} aria-label="Phone Scanner Keyboard">
+      <section className={`desktop-window ${page === 'settings' ? 'settings-window' : ''}`} aria-label="Phone Scan Desktop">
         <div className="titlebar">
           <div className="titlebar-left">
             <div className="app-mark small">
               <ScanBarcode size={18} strokeWidth={2.2} />
             </div>
-            <span>Phone Scanner Keyboard</span>
+            <span>Phone Scan</span>
           </div>
           <div className="window-controls" aria-hidden="true">
             <button type="button">
@@ -108,8 +188,8 @@ function App() {
               <ScanBarcode size={66} strokeWidth={1.9} />
               {page === 'settings' && (
                 <div className="sidebar-brand-text">
-                  <strong>Phone Scanner</strong>
-                  <strong>Keyboard</strong>
+                  <strong>Phone Scan</strong>
+                  <strong>Desktop</strong>
                 </div>
               )}
             </div>
@@ -163,14 +243,14 @@ function App() {
               <section className="connected-device-card" aria-label="Connected phone">
                 <div className="connected-status">
                   <span />
-                  <strong>Connected</strong>
+                  <strong>{connectInfo.connectedClients > 0 ? 'Connected' : 'Waiting'}</strong>
                 </div>
                 <div className="connected-device">
                   <Smartphone size={30} strokeWidth={1.9} />
                   <p>
-                    iPhone 14 Pro
+                    {connectInfo.connectedClients > 0 ? `${connectInfo.connectedClients} phone connected` : 'No phone connected'}
                     <br />
-                    192.168.1.15
+                    {connectInfo.ipAddress}:{connectInfo.port}
                   </p>
                 </div>
               </section>
@@ -184,13 +264,18 @@ function App() {
           </aside>
 
           {page === 'history' ? (
-            <HistoryScreen />
+            <HistoryScreen rows={scanHistory} />
           ) : page === 'settings' ? (
             <SettingsScreen />
           ) : page === 'help' ? (
             <HelpScreen />
           ) : (
-            <HomeScreen qrUrl={qrUrl} />
+            <HomeScreen
+              connectInfo={connectInfo}
+              onCopyScannerUrl={copyScannerUrl}
+              onOpenScannerPage={openScannerPage}
+              onRefreshConnectInfo={refreshConnectInfo}
+            />
           )}
         </div>
       </section>
@@ -198,7 +283,20 @@ function App() {
   )
 }
 
-function HomeScreen({ qrUrl }: { qrUrl: string }) {
+function HomeScreen({
+  connectInfo,
+  onCopyScannerUrl,
+  onOpenScannerPage,
+  onRefreshConnectInfo,
+}: {
+  connectInfo: DesktopConnectInfo
+  onCopyScannerUrl: () => void
+  onOpenScannerPage: () => void
+  onRefreshConnectInfo: () => void
+}) {
+  const isRunning = connectInfo.status === 'running'
+  const hasPhone = connectInfo.connectedClients > 0
+
   return (
     <section className="content-panel">
       <div className="main-content">
@@ -208,7 +306,7 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
             <span className="hero-barcode" />
           </div>
           <div>
-            <h1>Phone Scanner Keyboard</h1>
+            <h1>Phone Scan</h1>
             <p>Connect your phone and scan directly into any focused input.</p>
           </div>
         </header>
@@ -221,12 +319,12 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
                   <Check size={27} strokeWidth={3.2} />
                 </span>
                 <span>Local Server Status:</span>
-                <strong>Running</strong>
+                <strong>{isRunning ? 'Running' : connectInfo.status === 'error' ? 'Error' : 'Starting'}</strong>
               </div>
 
               <div className="info-list">
-                <InfoRow icon={<Laptop />} label="PC IP Address" value="192.168.1.10" />
-                <InfoRow icon={<Network />} label="Port" value="8787" />
+                <InfoRow icon={<Laptop />} label="PC IP Address" value={connectInfo.ipAddress} />
+                <InfoRow icon={<Network />} label="Port" value={String(connectInfo.port)} />
                 <InfoRow icon={<Wifi />} label="Connection Method" value="Wi-Fi / USB Tethering" />
               </div>
             </section>
@@ -256,19 +354,21 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
           <div className="center-column">
             <section className="card qr-card">
               <h2>Scan with your phone to connect</h2>
-              <div className="qr-frame">{qrUrl && <img src={qrUrl} alt="Scanner connection QR" />}</div>
+              <div className="qr-frame">
+                {connectInfo.qrDataUrl ? <img src={connectInfo.qrDataUrl} alt="Scanner connection QR" /> : null}
+              </div>
             </section>
 
             <section className="card action-card">
-              <button className="secondary-button" type="button">
+              <button className="secondary-button" type="button" onClick={onRefreshConnectInfo}>
                 <RefreshCw size={30} />
                 <span>Refresh QR</span>
               </button>
-              <button className="secondary-button" type="button">
+              <button className="secondary-button" type="button" onClick={onCopyScannerUrl}>
                 <Copy size={28} />
                 <span>Copy Link</span>
               </button>
-              <button className="primary-button" type="button">
+              <button className="primary-button" type="button" onClick={onOpenScannerPage}>
                 <ExternalLink size={28} />
                 <span>Open Scanner Page</span>
               </button>
@@ -277,8 +377,8 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
 
           <section className="card phone-card">
             <div className="phone-status">
-              <span className="offline-dot" />
-              <span>Phone Status: <strong>Not connected</strong></span>
+              <span className={`offline-dot ${hasPhone ? 'online-dot' : ''}`} />
+              <span>Phone Status: <strong>{hasPhone ? 'Connected' : 'Not connected'}</strong></span>
             </div>
 
             <div className="phone-empty-state">
@@ -288,7 +388,11 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
                   <Link2 size={34} strokeWidth={2.4} />
                 </span>
               </div>
-              <p>Your phone will appear here<br />once connected.</p>
+              <p>
+                {hasPhone ? `${connectInfo.connectedClients} phone connected` : 'Your phone will appear here'}
+                <br />
+                {hasPhone ? `${connectInfo.ipAddress}:${connectInfo.port}` : 'once connected.'}
+              </p>
             </div>
           </section>
         </div>
@@ -302,7 +406,7 @@ function HomeScreen({ qrUrl }: { qrUrl: string }) {
   )
 }
 
-function HistoryScreen() {
+function HistoryScreen({ rows }: { rows: DesktopScanRecord[] }) {
   return (
     <section className="content-panel history-panel">
       <div className="history-content">
@@ -329,7 +433,7 @@ function HistoryScreen() {
             <Search size={26} strokeWidth={1.9} />
             <input type="search" placeholder="Search barcode..." />
           </label>
-          <span className="total-count">Total: 27</span>
+          <span className="total-count">Total: {rows.length}</span>
         </div>
 
         <section className="history-table-card">
@@ -341,9 +445,11 @@ function HistoryScreen() {
             <span>Action</span>
           </div>
 
-          {historyRows.map((row) => (
+          {rows.length === 0 && <div className="empty-history-row">No scans yet</div>}
+
+          {rows.map((row, index) => (
             <div className="history-table table-row" key={row.id}>
-              <span className="row-index">{row.id}</span>
+              <span className="row-index">{index + 1}</span>
               <span className="barcode-cell">
                 <strong>{row.barcode}</strong>
                 <Copy size={21} strokeWidth={1.9} />
@@ -392,7 +498,7 @@ function HistoryScreen() {
   )
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: DesktopScanStatus }) {
   const failed = status === 'Failed'
 
   return (
@@ -484,7 +590,7 @@ function SettingsScreen() {
 
 function HelpScreen() {
   const quickStartItems = [
-    ['Open Desktop Tool', 'Launch Phone Scanner Keyboard on your computer.'],
+    ['Open Desktop Tool', 'Launch Phone Scan on your computer.'],
     ['Scan QR with your phone', 'Use your phone to scan the QR code on the Home screen.'],
     ['Click the focused input', 'Place the cursor in any input field you want to fill.'],
     ['Start scanning barcodes', 'Scan barcodes and watch them appear in the input.'],

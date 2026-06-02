@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
+import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
   Camera,
@@ -31,20 +33,156 @@ import {
 
 type MobilePage = 'connect' | 'scanner' | 'manual' | 'shortcuts'
 
+type DesktopConnection = {
+  connected: boolean
+  serverUrl: string
+  token: string
+  computerName: string
+  ipAddress: string
+  port: string
+  error?: string
+}
+
+type LastScan = {
+  value: string
+  type: 'barcode' | 'qr' | 'manual'
+  time: string
+}
+
+type SendBarcode = (value: string, type: LastScan['type']) => Promise<boolean>
+
+function getInitialConnection(): DesktopConnection {
+  const url = new URL(window.location.href)
+  const serverUrl = url.searchParams.get('server') ?? window.location.origin
+  const token = url.searchParams.get('token') ?? ''
+
+  return {
+    connected: false,
+    serverUrl,
+    token,
+    computerName: 'Desktop',
+    ipAddress: window.location.hostname || '192.168.1.15',
+    port: window.location.port || '8787',
+    error: token ? undefined : 'Missing desktop token.',
+  }
+}
+
 function App() {
-  const [page, setPage] = useState<MobilePage>('shortcuts')
+  const [connection, setConnection] = useState<DesktopConnection>(() => getInitialConnection())
+  const [page, setPage] = useState<MobilePage>(() => (connection.token ? 'scanner' : 'connect'))
+  const [lastScan, setLastScan] = useState<LastScan | null>(null)
+  const socketRef = useRef<Socket | null>(null)
+
+  useEffect(() => {
+    if (!connection.token) {
+      return
+    }
+
+    const socket = io(connection.serverUrl, {
+      auth: { token: connection.token },
+      query: { token: connection.token },
+      transports: ['websocket', 'polling'],
+    })
+
+    socketRef.current = socket
+
+    socket.on('connect', () => {
+      setConnection((current) => ({ ...current, connected: true, error: undefined }))
+    })
+
+    socket.on('disconnect', () => {
+      setConnection((current) => ({ ...current, connected: false }))
+    })
+
+    socket.on('connect_error', (error) => {
+      setConnection((current) => ({ ...current, connected: false, error: error.message }))
+    })
+
+    socket.on('desktop:ready', (info: { computerName?: string; ipAddress?: string; port?: number }) => {
+      setConnection((current) => ({
+        ...current,
+        connected: true,
+        computerName: info.computerName ?? current.computerName,
+        ipAddress: info.ipAddress ?? current.ipAddress,
+        port: info.port ? String(info.port) : current.port,
+        error: undefined,
+      }))
+    })
+
+    return () => {
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [connection.serverUrl, connection.token])
+
+  const sendBarcode: SendBarcode = async (value, type) => {
+    const barcode = value.trim()
+
+    if (!barcode || !connection.token) {
+      return false
+    }
+
+    const payload = {
+      token: connection.token,
+      value: barcode,
+      type,
+      timestamp: Date.now(),
+    }
+
+    const sentBySocket = await new Promise<boolean>((resolve) => {
+      const socket = socketRef.current
+
+      if (!socket?.connected) {
+        resolve(false)
+        return
+      }
+
+      socket.timeout(5000).emit('barcode:scanned', payload, (error: Error | null, result?: { ok?: boolean }) => {
+        resolve(!error && result?.ok !== false)
+      })
+    })
+
+    if (!sentBySocket) {
+      try {
+        const response = await fetch(`${connection.serverUrl}/api/scan`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        })
+        const result = (await response.json()) as { ok?: boolean }
+
+        if (result.ok === false) {
+          return false
+        }
+      } catch {
+        return false
+      }
+    }
+
+    setLastScan({
+      value: barcode,
+      type,
+      time: new Intl.DateTimeFormat('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }).format(new Date(payload.timestamp)),
+    })
+
+    return true
+  }
 
   return (
     <main className="pwa-app" aria-label="Phone Scan PWA">
       <section className="app-screen">
         {page === 'scanner' ? (
-          <ScannerScreen />
+          <ScannerScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} />
         ) : page === 'manual' ? (
-          <ManualScreen />
+          <ManualScreen connection={connection} lastScan={lastScan} sendBarcode={sendBarcode} />
         ) : page === 'shortcuts' ? (
-          <ShortcutsScreen />
+          <ShortcutsScreen connection={connection} />
         ) : (
-          <ConnectScreen />
+          <ConnectScreen connection={connection} setPage={setPage} />
         )}
 
         <MobileTabs page={page} setPage={setPage} />
@@ -53,7 +191,13 @@ function App() {
   )
 }
 
-function ConnectScreen() {
+function ConnectScreen({
+  connection,
+  setPage,
+}: {
+  connection: DesktopConnection
+  setPage: (page: MobilePage) => void
+}) {
   return (
     <div className="pwa-content">
       <header className="connect-header">
@@ -86,9 +230,9 @@ function ConnectScreen() {
           <DesktopQrIllustration />
         </div>
 
-        <button className="scan-button" type="button">
+        <button className="scan-button" type="button" onClick={() => setPage('scanner')}>
           <QrCode size={33} strokeWidth={2.5} />
-          <span>Scan QR Code</span>
+          <span>{connection.connected ? 'Open Scanner' : 'Waiting for Desktop'}</span>
         </button>
 
         <div className="divider">
@@ -119,8 +263,12 @@ function ConnectScreen() {
           <div className="status-copy">
             <span className="green-dot" />
             <div>
-              <strong>Not Connected</strong>
-              <p>Scan QR code or enter IP to connect</p>
+              <strong>{connection.connected ? 'Connected' : 'Not Connected'}</strong>
+              <p>
+                {connection.connected
+                  ? `${connection.computerName} - ${connection.ipAddress}:${connection.port}`
+                  : connection.error ?? 'Scan QR code or enter IP to connect'}
+              </p>
             </div>
           </div>
           <div className="device-link-art" aria-hidden="true">
@@ -156,7 +304,68 @@ function ConnectScreen() {
   )
 }
 
-function ScannerScreen() {
+function ScannerScreen({
+  connection,
+  lastScan,
+  sendBarcode,
+}: {
+  connection: DesktopConnection
+  lastScan: LastScan | null
+  sendBarcode: SendBarcode
+}) {
+  const videoRef = useRef<HTMLVideoElement | null>(null)
+  const controlsRef = useRef<IScannerControls | null>(null)
+  const [scannerActive, setScannerActive] = useState(false)
+  const [scanMessage, setScanMessage] = useState('Align the barcode within the frame.')
+
+  useEffect(() => {
+    return () => {
+      controlsRef.current?.stop()
+      controlsRef.current = null
+    }
+  }, [])
+
+  const toggleScanner = async () => {
+    if (scannerActive) {
+      controlsRef.current?.stop()
+      controlsRef.current = null
+      setScannerActive(false)
+      setScanMessage('Scanner stopped.')
+      return
+    }
+
+    try {
+      const reader = new BrowserMultiFormatReader()
+      setScannerActive(true)
+      setScanMessage('Camera is scanning...')
+      controlsRef.current = await reader.decodeFromConstraints(
+        {
+          video: {
+            facingMode: {
+              ideal: 'environment',
+            },
+          },
+        },
+        videoRef.current ?? undefined,
+        async (result) => {
+          if (!result) {
+            return
+          }
+
+          const value = result.getText()
+          controlsRef.current?.stop()
+          controlsRef.current = null
+          setScannerActive(false)
+          setScanMessage('Barcode sent to desktop.')
+          await sendBarcode(value, 'barcode')
+        },
+      )
+    } catch (error) {
+      setScannerActive(false)
+      setScanMessage(error instanceof Error ? error.message : 'Camera unavailable.')
+    }
+  }
+
   return (
     <div className="scanner-content">
       <header className="scanner-header">
@@ -166,20 +375,15 @@ function ScannerScreen() {
         <h1>Camera Scanner</h1>
         <button className="connected-pill" type="button">
           <span />
-          <strong>Connected</strong>
+          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
           <i>⌄</i>
         </button>
       </header>
 
-      <section className="desktop-status-pill">
-        <Monitor size={31} strokeWidth={2} />
-        <span>Connected to: <strong>DESKTOP-8F3J2K</strong></span>
-        <em />
-        <Wifi size={31} strokeWidth={2.4} />
-        <strong>192.168.1.15:8787</strong>
-      </section>
+      <DesktopStatusPill connection={connection} />
 
-      <section className="camera-preview">
+      <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
+        <video ref={videoRef} className="camera-video" muted playsInline />
         <div className="blur-bg" />
         <button className="light-pill" type="button">
           <Zap size={30} strokeWidth={2.4} />
@@ -210,10 +414,10 @@ function ScannerScreen() {
           </span>
           <div>
             <p>Last scanned</p>
-            <strong>8936123456789</strong>
-            <time>Today, 10:24:35 AM</time>
+            <strong>{lastScan?.value ?? 'No barcode yet'}</strong>
+            <time>{lastScan ? `Today, ${lastScan.time}` : 'Waiting for scan'}</time>
           </div>
-          <button type="button">
+          <button type="button" disabled={!lastScan} onClick={() => lastScan && sendBarcode(lastScan.value, lastScan.type)}>
             <Send size={30} strokeWidth={2.3} />
             <span>Send Again</span>
           </button>
@@ -224,7 +428,7 @@ function ScannerScreen() {
               <span>◌</span>
               <strong>Scan Tips</strong>
             </div>
-            <p>Align the barcode within the frame.</p>
+            <p>{scanMessage}</p>
             <p>Make sure it is well-lit and not blurry.</p>
           </div>
           <div className="tips-barcode-art" aria-hidden="true">
@@ -248,9 +452,9 @@ function ScannerScreen() {
           <strong>Flash</strong>
           <span>Off</span>
         </button>
-        <button className="scan-control" type="button">
+        <button className="scan-control" type="button" onClick={toggleScanner}>
           <ScanLine size={59} strokeWidth={2.4} />
-          <strong>Scan</strong>
+          <strong>{scannerActive ? 'Stop' : 'Scan'}</strong>
         </button>
         <button className="side-control" type="button">
           <Keyboard size={42} strokeWidth={2.3} />
@@ -261,8 +465,18 @@ function ScannerScreen() {
   )
 }
 
-function ManualScreen() {
+function ManualScreen({
+  connection,
+  lastScan,
+  sendBarcode,
+}: {
+  connection: DesktopConnection
+  lastScan: LastScan | null
+  sendBarcode: SendBarcode
+}) {
+  const [manualValue, setManualValue] = useState(lastScan?.value ?? '8936123456789')
   const recentInputs = [
+    ...(lastScan ? [[lastScan.value, `Today, ${lastScan.time}`]] : []),
     ['8936123456789', 'Today, 10:24 AM'],
     ['6901234567892', 'Today, 10:20 AM'],
     ['1234567890123', 'Today, 10:18 AM'],
@@ -279,18 +493,12 @@ function ManualScreen() {
         <h1>Manual Input</h1>
         <button className="connected-pill" type="button">
           <span />
-          <strong>Connected</strong>
+          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
           <i>⌄</i>
         </button>
       </header>
 
-      <section className="desktop-status-pill">
-        <Monitor size={31} strokeWidth={2} />
-        <span>Connected to: <strong>DESKTOP-8F3J2K</strong></span>
-        <em />
-        <Wifi size={31} strokeWidth={2.4} />
-        <strong>192.168.1.15:8787</strong>
-      </section>
+      <DesktopStatusPill connection={connection} />
 
       <section className="manual-entry-card">
         <div className="manual-entry-title">
@@ -306,9 +514,9 @@ function ManualScreen() {
         <label className="barcode-field">
           <strong>Barcode</strong>
           <span className="input-shell">
-            <input value="8936123456789" readOnly />
+            <input value={manualValue} onChange={(event) => setManualValue(event.target.value)} />
             <i />
-            <button type="button" aria-label="Clear barcode">
+            <button type="button" aria-label="Clear barcode" onClick={() => setManualValue('')}>
               <X size={27} strokeWidth={3} />
             </button>
           </span>
@@ -316,15 +524,22 @@ function ManualScreen() {
 
         <div className="input-meta">
           <span>Supports 1D / 2D barcodes</span>
-          <span>13 characters</span>
+          <span>{manualValue.trim().length} characters</span>
         </div>
 
-        <button className="manual-send-button" type="button">
+        <button className="manual-send-button" type="button" onClick={() => sendBarcode(manualValue, 'manual')}>
           <Send size={31} strokeWidth={2.4} />
           <span>Send</span>
         </button>
 
-        <button className="paste-button" type="button">
+        <button
+          className="paste-button"
+          type="button"
+          onClick={async () => {
+            const text = await navigator.clipboard?.readText()
+            setManualValue(text ?? manualValue)
+          }}
+        >
           <Clipboard size={28} strokeWidth={2.3} />
           <span>Paste from Clipboard</span>
         </button>
@@ -376,7 +591,7 @@ function ManualScreen() {
   )
 }
 
-function ShortcutsScreen() {
+function ShortcutsScreen({ connection }: { connection: DesktopConnection }) {
   const globalShortcuts = [
     {
       icon: <ScanLine />,
@@ -471,13 +686,7 @@ function ShortcutsScreen() {
         </button>
       </header>
 
-      <section className="desktop-status-pill shortcuts-status">
-        <Monitor size={31} strokeWidth={2} />
-        <span>Connected to: <strong>DESKTOP-8F3J2K</strong></span>
-        <em />
-        <Wifi size={31} strokeWidth={2.4} />
-        <strong>192.168.1.15:8787</strong>
-      </section>
+      <DesktopStatusPill connection={connection} className="shortcuts-status" />
 
       <ShortcutGroup title="Global Shortcuts" shortcuts={globalShortcuts} />
       <ShortcutGroup title="Scanning Shortcuts" shortcuts={scanningShortcuts} />
@@ -491,6 +700,26 @@ function ShortcutsScreen() {
         </div>
       </section>
     </div>
+  )
+}
+
+function DesktopStatusPill({
+  connection,
+  className = '',
+}: {
+  connection: DesktopConnection
+  className?: string
+}) {
+  return (
+    <section className={`desktop-status-pill ${className}`}>
+      <Monitor size={31} strokeWidth={2} />
+      <span>
+        Connected to: <strong>{connection.connected ? connection.computerName : 'Waiting for desktop'}</strong>
+      </span>
+      <em />
+      <Wifi size={31} strokeWidth={2.4} />
+      <strong>{connection.ipAddress}:{connection.port}</strong>
+    </section>
   )
 }
 

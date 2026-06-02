@@ -6,8 +6,9 @@
   "scripts": {
     "dev": "pnpm --filter @web-barcode/desktop dev",
     "dev:pwa": "pnpm --filter @web-barcode/scanner-pwa dev",
-    "build": "pnpm --filter @web-barcode/desktop build",
+    "build": "pnpm build:pwa && pnpm --filter @web-barcode/desktop build",
     "build:pwa": "pnpm --filter @web-barcode/scanner-pwa build",
+    "start": "pnpm --filter @web-barcode/desktop start",
     "preview": "pnpm --filter @web-barcode/desktop preview",
     "preview:pwa": "pnpm --filter @web-barcode/scanner-pwa preview"
   },

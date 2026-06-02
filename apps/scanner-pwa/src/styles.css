@@ -958,6 +958,25 @@ button {
   background: #3b392f;
 }
 
+.camera-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+}
+
+.camera-preview.has-video .camera-video {
+  opacity: 1;
+}
+
+.camera-preview.has-video .blur-bg,
+.camera-preview.has-video .parcel-box {
+  opacity: 0.18;
+}
+
 .blur-bg {
   position: absolute;
   inset: 0;

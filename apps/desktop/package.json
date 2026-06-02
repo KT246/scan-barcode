@@ -3,17 +3,29 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "main": "dist-electron/main/index.js",
   "scripts": {
-    "dev": "vite --host 0.0.0.0",
-    "build": "tsc -b && vite build",
+    "dev": "concurrently -k \"pnpm watch:main\" \"pnpm watch:preload\" \"pnpm dev:renderer\" \"pnpm dev:electron\"",
+    "dev:renderer": "vite --host 0.0.0.0",
+    "dev:electron": "wait-on tcp:5173 dist-electron/main/index.js dist-electron/preload/index.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron dist-electron/main/index.js",
+    "watch:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --outfile=dist-electron/main/index.js --external:electron --watch",
+    "watch:preload": "esbuild src/main/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload/index.cjs --external:electron --watch",
+    "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --outfile=dist-electron/main/index.js --external:electron",
+    "build:preload": "esbuild src/main/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload/index.cjs --external:electron",
+    "build": "pnpm build:main && pnpm build:preload && tsc -b && vite build",
+    "start": "electron dist-electron/main/index.js",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@fastify/static": "^9.1.3",
     "@web-barcode/shared": "workspace:*",
+    "electron": "^42.3.1",
+    "fastify": "^5.8.5",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "socket.io": "^4.8.3"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
@@ -21,7 +33,11 @@
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^10.0.3",
+    "cross-env": "^10.1.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
-    "vite": "^6.0.5"
+    "vite": "^6.0.5",
+    "wait-on": "^9.0.10"
   }
 }
