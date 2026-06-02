@@ -13,7 +13,7 @@ import {
   X,
 } from 'lucide-react'
 
-type MobilePage = 'connect' | 'scanner'
+type MobilePage = 'connect' | 'scanner' | 'settings'
 
 type DesktopConnection = {
   connected: boolean
@@ -216,12 +216,25 @@ function getInitialConnection(): DesktopConnection {
 function App() {
   const [connection, setConnection] = useState<DesktopConnection>(() => getInitialConnection())
   const [page, setPage] = useState<MobilePage>(() => (connection.token ? 'scanner' : 'connect'))
+  const [scannerSettings, setScannerSettings] = useState<ScannerSettings>(() => getInitialScannerSettings())
   const [lastScan, setLastScan] = useState<LastScan | null>(null)
   const [lastSend, setLastSend] = useState<LastSend>({
     state: 'idle',
     message: 'No barcode sent yet.',
   })
   const socketRef = useRef<Socket | null>(null)
+
+  const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
+    setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
+  }
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(scannerSettingsStorageKey, JSON.stringify(scannerSettings))
+    } catch {
+      // Storage can be unavailable in private browsing; runtime settings still work.
+    }
+  }, [scannerSettings])
 
   useEffect(() => {
     if (!connection.token) {
@@ -409,6 +422,13 @@ function App() {
             lastSend={lastSend}
             recordLocalScan={recordLocalScan}
             sendBarcode={sendBarcode}
+            scannerSettings={scannerSettings}
+          />
+        ) : page === 'settings' ? (
+          <SettingsScreen
+            connection={connection}
+            scannerSettings={scannerSettings}
+            updateScannerSettings={updateScannerSettings}
           />
         ) : (
           <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} />
@@ -605,12 +625,14 @@ function ScannerScreen({
   lastSend,
   recordLocalScan,
   sendBarcode,
+  scannerSettings,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
   lastSend: LastSend
   recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
   sendBarcode: SendBarcode
+  scannerSettings: ScannerSettings
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
@@ -619,16 +641,10 @@ function ScannerScreen({
   const connectionRef = useRef(connection)
   const recordLocalScanRef = useRef(recordLocalScan)
   const sendBarcodeRef = useRef(sendBarcode)
-  const [scannerSettings, setScannerSettings] = useState<ScannerSettings>(() => getInitialScannerSettings())
   const settingsRef = useRef(scannerSettings)
   const [scannerActive, setScannerActive] = useState(false)
-  const [settingsOpen, setSettingsOpen] = useState(false)
   const [scanMessage, setScanMessage] = useState('Align the barcode within the frame.')
   const cameraNeedsTrustedHttps = !window.isSecureContext
-
-  const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
-    setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
-  }
 
   useEffect(() => {
     connectionRef.current = connection
@@ -638,12 +654,6 @@ function ScannerScreen({
 
   useEffect(() => {
     settingsRef.current = scannerSettings
-
-    try {
-      window.localStorage.setItem(scannerSettingsStorageKey, JSON.stringify(scannerSettings))
-    } catch {
-      // Storage can be unavailable in private browsing; runtime settings still work.
-    }
   }, [scannerSettings])
 
   const stopScanner = () => {
@@ -760,78 +770,20 @@ function ScannerScreen({
   return (
     <div className="scanner-content">
       <header className="scanner-header">
-        <button
-          className={`hamburger scanner-settings-toggle ${settingsOpen ? 'active' : ''}`}
-          type="button"
-          aria-label="Scanner settings"
-          onClick={() => setSettingsOpen((open) => !open)}
-        >
-          <Settings size={39} strokeWidth={2.5} />
-        </button>
+        <span className="hamburger scanner-header-icon" aria-hidden="true">
+          <ScanLine size={39} strokeWidth={2.5} />
+        </span>
         <h1>Camera Scanner</h1>
         <button className="connected-pill" type="button">
           <span className={connection.connected ? 'online' : 'offline'} />
           <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
-          <i>⌄</i>
+          <i>v</i>
         </button>
       </header>
 
       <DesktopStatusPill connection={connection} />
 
       {cameraNeedsTrustedHttps && <CertificateNotice connection={connection} />}
-
-      {settingsOpen && (
-        <section className="scanner-settings-card">
-          <div className="scanner-settings-header">
-            <div>
-              <strong>Scanner Settings</strong>
-              <span>Barcode-only camera behavior</span>
-            </div>
-            <button type="button" aria-label="Close scanner settings" onClick={() => setSettingsOpen(false)}>
-              <X size={24} strokeWidth={2.5} />
-            </button>
-          </div>
-
-          <label className="scanner-setting-row">
-            <span>
-              <strong>Scan interval</strong>
-              <small>Minimum delay before accepting the next read.</small>
-            </span>
-            <input
-              min="0.2"
-              max="10"
-              step="0.1"
-              type="number"
-              value={scannerSettings.scanIntervalMs / 1000}
-              onChange={(event) => updateScannerSettings({ scanIntervalMs: Number(event.target.value) * 1000 })}
-            />
-          </label>
-
-          <label className="scanner-setting-row">
-            <span>
-              <strong>Ignore duplicates</strong>
-              <small>Block the same barcode while it stays in frame.</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={scannerSettings.duplicateLock}
-              onChange={(event) => updateScannerSettings({ duplicateLock: event.target.checked })}
-            />
-          </label>
-
-          <label className="scanner-setting-row">
-            <span>
-              <strong>Auto send</strong>
-              <small>Send each barcode to desktop after reading.</small>
-            </span>
-            <input
-              type="checkbox"
-              checked={scannerSettings.autoSend}
-              onChange={(event) => updateScannerSettings({ autoSend: event.target.checked })}
-            />
-          </label>
-        </section>
-      )}
 
       <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
         <video ref={videoRef} className="camera-video" muted playsInline />
@@ -876,6 +828,82 @@ function ScannerScreen({
       </section>
 
       <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
+    </div>
+  )
+}
+
+function SettingsScreen({
+  connection,
+  scannerSettings,
+  updateScannerSettings,
+}: {
+  connection: DesktopConnection
+  scannerSettings: ScannerSettings
+  updateScannerSettings: (settings: Partial<ScannerSettings>) => void
+}) {
+  return (
+    <div className="scanner-content settings-content">
+      <header className="scanner-header">
+        <span className="hamburger scanner-settings-toggle active" aria-hidden="true">
+          <Settings size={39} strokeWidth={2.5} />
+        </span>
+        <h1>Settings</h1>
+        <button className="connected-pill" type="button">
+          <span className={connection.connected ? 'online' : 'offline'} />
+          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
+          <i>⌄</i>
+        </button>
+      </header>
+
+      <DesktopStatusPill connection={connection} />
+
+      <section className="scanner-settings-card settings-page-card">
+        <div className="scanner-settings-header">
+          <div>
+            <strong>Scanner Settings</strong>
+            <span>Barcode-only camera behavior</span>
+          </div>
+        </div>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>Scan interval</strong>
+            <small>Minimum delay before accepting the next read.</small>
+          </span>
+          <input
+            min="0.2"
+            max="10"
+            step="0.1"
+            type="number"
+            value={scannerSettings.scanIntervalMs / 1000}
+            onChange={(event) => updateScannerSettings({ scanIntervalMs: Number(event.target.value) * 1000 })}
+          />
+        </label>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>Ignore duplicates</strong>
+            <small>Block the same barcode while it stays in frame.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={scannerSettings.duplicateLock}
+            onChange={(event) => updateScannerSettings({ duplicateLock: event.target.checked })}
+          />
+        </label>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>Auto send</strong>
+            <small>Send each barcode to desktop after reading.</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={scannerSettings.autoSend}
+            onChange={(event) => updateScannerSettings({ autoSend: event.target.checked })}
+          />
+        </label>
+      </section>
     </div>
   )
 }
@@ -979,6 +1007,7 @@ function MobileTabs({
   const tabs = [
     { page: 'scanner' as const, label: 'Scanner', icon: <ScanLine size={34} strokeWidth={2.2} /> },
     { page: 'connect' as const, label: 'Connect', icon: <Link2 size={35} strokeWidth={2.6} /> },
+    { page: 'settings' as const, label: 'Settings', icon: <Settings size={34} strokeWidth={2.3} /> },
   ]
 
   return (
