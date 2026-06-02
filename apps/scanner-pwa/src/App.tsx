@@ -329,8 +329,8 @@ function ScannerScreen({
           controlsRef.current?.stop()
           controlsRef.current = null
           setScannerActive(false)
-          setScanMessage('Barcode sent to desktop.')
-          await sendBarcode(value, 'barcode')
+          const delivered = await sendBarcode(value, 'barcode')
+          setScanMessage(delivered ? 'Barcode sent to desktop.' : 'Could not send barcode. Check desktop connection, firewall, or QR IP.')
         },
       )
     } catch (error) {

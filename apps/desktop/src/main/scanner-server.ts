@@ -140,7 +140,7 @@ async function generateQrDataUrl(url: string) {
 
 async function createFastifyServer(options: ScannerServerOptions, requestedPort: number) {
   let token = createToken()
-  let ipAddress = getLocalIpAddress()
+  let ipAddress = await getLocalIpAddress()
   let certificate: LocalCertificate = await ensureLocalCertificate(options.certificateDir, ipAddress)
   const fastify = Fastify({
     logger: false,
