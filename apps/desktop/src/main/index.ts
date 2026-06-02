@@ -1,17 +1,16 @@
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
-import { fileURLToPath, pathToFileURL } from 'node:url'
-import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { pathToFileURL } from 'node:url'
+import { app, BrowserWindow, ipcMain, shell, type BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { DesktopConnectInfo, DesktopScanRecord } from '../shared/desktop-api'
 import { typeIntoFocusedWindow } from './keyboard'
 import { startScannerServer, type ScannerServerHandle } from './scanner-server'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const desktopRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(desktopRoot, '../..')
 
-let mainWindow: BrowserWindow | null = null
+let mainWindow: ElectronBrowserWindow | null = null
 let server: ScannerServerHandle | null = null
 let connectInfo: DesktopConnectInfo = {
   status: 'starting',

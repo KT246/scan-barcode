@@ -3,17 +3,17 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "main": "dist-electron/main/index.js",
+  "main": "dist-electron/main/index.cjs",
   "scripts": {
     "dev": "concurrently -k \"pnpm watch:main\" \"pnpm watch:preload\" \"pnpm dev:renderer\" \"pnpm dev:electron\"",
     "dev:renderer": "vite --host 0.0.0.0",
-    "dev:electron": "wait-on tcp:5173 dist-electron/main/index.js dist-electron/preload/index.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 electron dist-electron/main/index.js",
-    "watch:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --outfile=dist-electron/main/index.js --external:electron --watch",
+    "dev:electron": "wait-on tcp:5173 dist-electron/main/index.cjs dist-electron/preload/index.cjs && cross-env VITE_DEV_SERVER_URL=http://localhost:5173 node scripts/run-electron.cjs dist-electron/main/index.cjs",
+    "watch:main": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist-electron/main/index.cjs --packages=external --watch",
     "watch:preload": "esbuild src/main/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload/index.cjs --external:electron --watch",
-    "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=esm --outfile=dist-electron/main/index.js --external:electron",
+    "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist-electron/main/index.cjs --packages=external",
     "build:preload": "esbuild src/main/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload/index.cjs --external:electron",
     "build": "pnpm build:main && pnpm build:preload && tsc -b && vite build",
-    "start": "electron dist-electron/main/index.js",
+    "start": "node scripts/run-electron.cjs dist-electron/main/index.cjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
