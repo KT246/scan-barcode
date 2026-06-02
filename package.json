@@ -4,13 +4,14 @@
   "version": "0.1.0",
   "packageManager": "pnpm@10.24.0",
   "scripts": {
-    "dev": "pnpm --filter @web-barcode/desktop dev",
-    "dev:pwa": "pnpm --filter @web-barcode/scanner-pwa dev",
-    "build": "pnpm build:pwa && pnpm --filter @web-barcode/desktop build",
-    "build:pwa": "pnpm --filter @web-barcode/scanner-pwa build",
-    "start": "pnpm --filter @web-barcode/desktop start",
-    "preview": "pnpm --filter @web-barcode/desktop preview",
-    "preview:pwa": "pnpm --filter @web-barcode/scanner-pwa preview"
+    "dev": "pnpm --filter @web-barcode/desktop run dev",
+    "dev:pwa": "pnpm --filter @web-barcode/scanner-pwa run dev",
+    "build": "pnpm run build:pwa && pnpm --filter @web-barcode/desktop run build",
+    "build:pwa": "pnpm --filter @web-barcode/scanner-pwa run build",
+    "dist": "pnpm run build && pnpm --filter @web-barcode/desktop run dist:win",
+    "start": "pnpm --filter @web-barcode/desktop run start",
+    "preview": "pnpm --filter @web-barcode/desktop run preview",
+    "preview:pwa": "pnpm --filter @web-barcode/scanner-pwa run preview"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

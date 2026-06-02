@@ -5,7 +5,10 @@ export type DesktopConnectInfo = {
   computerName: string
   ipAddress: string
   port: number
+  protocol: 'http' | 'https'
   scannerUrl: string
+  certificateUrl: string
+  trustUrl: string
   qrDataUrl: string
   tokenPreview: string
   connectedClients: number

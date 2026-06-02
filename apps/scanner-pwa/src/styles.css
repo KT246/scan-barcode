@@ -31,6 +31,10 @@ button {
   font: inherit;
 }
 
+a {
+  font: inherit;
+}
+
 .pwa-stage {
   width: 100%;
   min-height: 100%;
@@ -947,6 +951,61 @@ button {
   height: 31px;
   margin: 0 13px;
   background: #c9d1de;
+}
+
+.certificate-notice {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: 38px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px solid #b8d4ff;
+  border-radius: 16px;
+  color: var(--blue-dark);
+  background: #f4f9ff;
+  box-shadow:
+    0 6px 16px rgba(18, 34, 62, 0.06),
+    0 1px 2px rgba(18, 34, 62, 0.05);
+}
+
+.certificate-notice > svg {
+  width: 34px;
+  height: 34px;
+  padding: 6px;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--blue);
+}
+
+.certificate-notice strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 760;
+}
+
+.certificate-notice p {
+  margin: 0;
+  color: #27344f;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.certificate-notice a {
+  min-width: 86px;
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: #fff;
+  background: var(--blue-dark);
+  text-decoration: none;
+  font-size: 16px;
+  font-weight: 700;
 }
 
 .camera-preview {
@@ -2304,6 +2363,36 @@ button {
 .app-screen .desktop-status-pill em {
   height: 24px;
   margin: 0 4px;
+}
+
+.app-screen .certificate-notice {
+  min-height: 72px;
+  grid-template-columns: 30px 1fr auto;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 12px;
+}
+
+.app-screen .certificate-notice > svg {
+  width: 28px;
+  height: 28px;
+  padding: 5px;
+}
+
+.app-screen .certificate-notice strong {
+  font-size: 14px;
+}
+
+.app-screen .certificate-notice p {
+  font-size: 12px;
+}
+
+.app-screen .certificate-notice a {
+  min-width: 64px;
+  min-height: 34px;
+  border-radius: 7px;
+  font-size: 13px;
 }
 
 .app-screen .camera-preview {

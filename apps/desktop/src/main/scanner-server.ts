@@ -7,6 +7,7 @@ import fastifyStatic from '@fastify/static'
 import QRCode from 'qrcode'
 import { Server as SocketServer } from 'socket.io'
 import type { DesktopConnectInfo } from '../shared/desktop-api'
+import { ensureLocalCertificate, type LocalCertificate } from './local-certificate'
 import { getLocalIpAddress } from './network'
 
 const DEFAULT_PORT = 8787
@@ -28,6 +29,7 @@ type NormalizedScanPayload = {
 
 type ScannerServerOptions = {
   scannerDistPath: string
+  certificateDir: string
   onScan: (payload: NormalizedScanPayload) => Promise<{ ok: boolean; error?: string }>
   onConnectionChange: (info: DesktopConnectInfo) => void
 }
@@ -83,6 +85,41 @@ function fallbackScannerHtml(info: DesktopConnectInfo) {
     <main>
       <h1>Phone Scan PWA is not built yet</h1>
       <p>Run <strong>pnpm build:pwa</strong> from the repo root, then restart the desktop app.</p>
+      <p>If the phone camera is blocked, open the certificate page and install the Phone Scan local certificate.</p>
+      <code>${info.scannerUrl}</code>
+      <p><a href="${info.trustUrl}">Open certificate setup</a></p>
+    </main>
+  </body>
+</html>`
+}
+
+function trustCertificateHtml(info: DesktopConnectInfo) {
+  return `<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Phone Scan Certificate</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; font-family: Segoe UI, Arial, sans-serif; background: #f4f8ff; color: #111827; }
+      main { width: min(520px, calc(100vw - 32px)); padding: 28px; border: 1px solid #dbe5f2; border-radius: 12px; background: #fff; box-shadow: 0 20px 50px rgba(22, 36, 58, .12); }
+      h1 { margin: 0 0 10px; font-size: 24px; }
+      p, li { color: #526174; line-height: 1.5; }
+      a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 16px; border-radius: 8px; color: #fff; background: #0759e4; text-decoration: none; font-weight: 700; }
+      code { display: block; margin-top: 14px; padding: 12px; border-radius: 8px; background: #eef5ff; color: #0759e4; overflow-wrap: anywhere; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Trust Phone Scan Local Certificate</h1>
+      <p>The camera scanner needs HTTPS. Install this local certificate on your phone, then reopen the scanner link.</p>
+      <ol>
+        <li>Tap Download Certificate.</li>
+        <li>Install the downloaded profile/certificate in phone settings.</li>
+        <li>Mark it as trusted if your phone asks.</li>
+        <li>Return to the scanner page.</li>
+      </ol>
+      <p><a href="${info.certificateUrl}">Download Certificate</a></p>
       <code>${info.scannerUrl}</code>
     </main>
   </body>
@@ -102,9 +139,16 @@ async function generateQrDataUrl(url: string) {
 }
 
 async function createFastifyServer(options: ScannerServerOptions, requestedPort: number) {
-  const fastify = Fastify({ logger: false })
   let token = createToken()
   let ipAddress = getLocalIpAddress()
+  let certificate: LocalCertificate = await ensureLocalCertificate(options.certificateDir, ipAddress)
+  const fastify = Fastify({
+    logger: false,
+    https: {
+      key: certificate.key,
+      cert: certificate.cert,
+    },
+  })
   let actualPort = requestedPort
   let connectedClients = 0
   let qrDataUrl = ''
@@ -112,14 +156,20 @@ async function createFastifyServer(options: ScannerServerOptions, requestedPort:
   const scannerIndexPath = path.join(options.scannerDistPath, 'index.html')
   const hasScannerBuild = fs.existsSync(scannerIndexPath)
 
-  const buildScannerUrl = () => `http://${ipAddress}:${actualPort}/scan?token=${encodeURIComponent(token)}`
+  const buildBaseUrl = () => `https://${ipAddress}:${actualPort}`
+  const buildScannerUrl = () => `${buildBaseUrl()}/scan?token=${encodeURIComponent(token)}`
+  const buildCertificateUrl = () => `${buildBaseUrl()}/cert/phone-scan-local-cert.pem`
+  const buildTrustUrl = () => `${buildBaseUrl()}/trust?token=${encodeURIComponent(token)}`
 
   const getConnectInfo = (): DesktopConnectInfo => ({
     status: 'running',
     computerName: os.hostname(),
     ipAddress,
     port: actualPort,
+    protocol: 'https',
     scannerUrl: buildScannerUrl(),
+    certificateUrl: buildCertificateUrl(),
+    trustUrl: buildTrustUrl(),
     qrDataUrl,
     tokenPreview: getTokenPreview(token),
     connectedClients,
@@ -145,6 +195,17 @@ async function createFastifyServer(options: ScannerServerOptions, requestedPort:
 
   fastify.get('/api/connect-info', async () => getConnectInfo())
 
+  fastify.get('/cert/phone-scan-local-cert.pem', async (_request, reply) => {
+    reply.header('Content-Disposition', 'attachment; filename="phone-scan-local-cert.pem"')
+    reply.type('application/x-x509-ca-cert')
+    return fs.createReadStream(certificate.certPath)
+  })
+
+  fastify.get('/trust', async (_request, reply) => {
+    reply.type('text/html')
+    return trustCertificateHtml(getConnectInfo())
+  })
+
   fastify.post('/api/scan', async (request, reply) => {
     const payload = normalizePayload(request.body as IncomingScanPayload, token)
 
@@ -161,6 +222,7 @@ async function createFastifyServer(options: ScannerServerOptions, requestedPort:
     await fastify.register(fastifyStatic, {
       root: options.scannerDistPath,
       prefix: '/',
+      index: false,
       wildcard: false,
     })
   }
@@ -249,7 +311,6 @@ async function createFastifyServer(options: ScannerServerOptions, requestedPort:
     getConnectInfo,
     refreshToken: async () => {
       token = createToken()
-      ipAddress = getLocalIpAddress()
       connectedClients = 0
       io.disconnectSockets(true)
       await refreshQr()

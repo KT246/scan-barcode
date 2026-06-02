@@ -1,6 +1,7 @@
 import os from 'node:os'
 import path from 'node:path'
 import crypto from 'node:crypto'
+import fs from 'node:fs'
 import { pathToFileURL } from 'node:url'
 import { app, BrowserWindow, ipcMain, shell, type BrowserWindow as ElectronBrowserWindow } from 'electron'
 import type { DesktopConnectInfo, DesktopScanRecord } from '../shared/desktop-api'
@@ -9,6 +10,25 @@ import { startScannerServer, type ScannerServerHandle } from './scanner-server'
 
 const desktopRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(desktopRoot, '../..')
+const bootLogPath = path.join(os.tmpdir(), 'phone-scan-main.log')
+
+function writeBootLog(message: string, error?: unknown) {
+  const detail = error instanceof Error ? `${error.stack ?? error.message}` : error ? String(error) : ''
+
+  try {
+    fs.appendFileSync(bootLogPath, `[${new Date().toISOString()}] ${message}${detail ? `\n${detail}` : ''}\n`, 'utf8')
+  } catch {
+    // Logging must never block app startup.
+  }
+}
+
+process.on('uncaughtException', (error) => {
+  writeBootLog('uncaughtException', error)
+})
+
+process.on('unhandledRejection', (error) => {
+  writeBootLog('unhandledRejection', error)
+})
 
 let mainWindow: ElectronBrowserWindow | null = null
 let server: ScannerServerHandle | null = null
@@ -17,7 +37,10 @@ let connectInfo: DesktopConnectInfo = {
   computerName: os.hostname(),
   ipAddress: '127.0.0.1',
   port: 8787,
+  protocol: 'https',
   scannerUrl: '',
+  certificateUrl: '',
+  trustUrl: '',
   qrDataUrl: '',
   tokenPreview: '',
   connectedClients: 0,
@@ -82,13 +105,17 @@ async function handleIncomingScan(payload: { value: string; type: 'barcode' | 'q
 
 async function startLocalServer() {
   try {
+    writeBootLog('starting local server')
     server = await startScannerServer({
       scannerDistPath: resolveScannerDistPath(),
+      certificateDir: path.join(app.getPath('userData'), 'certificates'),
       onScan: handleIncomingScan,
       onConnectionChange: broadcastConnectInfo,
     })
+    writeBootLog(`local server running: ${server.getConnectInfo().scannerUrl}`)
     broadcastConnectInfo(server.getConnectInfo())
   } catch (error) {
+    console.error('Failed to start Phone Scan local server:', error)
     broadcastConnectInfo({
       ...connectInfo,
       status: 'error',
@@ -98,6 +125,7 @@ async function startLocalServer() {
 }
 
 async function createMainWindow() {
+  writeBootLog('creating main window')
   mainWindow = new BrowserWindow({
     width: 1420,
     height: 1030,
@@ -141,6 +169,7 @@ ipcMain.handle('phoneScan:openScannerPage', async () => {
 })
 
 app.whenReady().then(async () => {
+  writeBootLog(`app ready packaged=${app.isPackaged}`)
   await startLocalServer()
   await createMainWindow()
 })

@@ -2,6 +2,8 @@
   "name": "@web-barcode/desktop",
   "private": true,
   "version": "0.1.0",
+  "description": "Phone Scan desktop barcode bridge.",
+  "author": "KT246 <tayattapeu@gmail.com>",
   "type": "module",
   "main": "dist-electron/main/index.cjs",
   "scripts": {
@@ -13,18 +15,19 @@
     "build:main": "esbuild src/main/index.ts --bundle --platform=node --format=cjs --outfile=dist-electron/main/index.cjs --packages=external",
     "build:preload": "esbuild src/main/preload.ts --bundle --platform=node --format=cjs --outfile=dist-electron/preload/index.cjs --external:electron",
     "build": "pnpm build:main && pnpm build:preload && tsc -b && vite build",
+    "dist:win": "npx --yes electron-builder@26.8.1 --config electron-builder.yml --win nsis",
     "start": "node scripts/run-electron.cjs dist-electron/main/index.cjs",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
     "@fastify/static": "^9.1.3",
     "@web-barcode/shared": "workspace:*",
-    "electron": "^42.3.1",
     "fastify": "^5.8.5",
     "lucide-react": "^0.468.0",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "selfsigned": "^5.5.0",
     "socket.io": "^4.8.3"
   },
   "devDependencies": {
@@ -35,6 +38,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "electron": "^42.3.1",
     "esbuild": "^0.28.0",
     "typescript": "^5.9.3",
     "vite": "^6.0.5",

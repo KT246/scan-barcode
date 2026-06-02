@@ -44,13 +44,16 @@ import {
 } from 'lucide-react'
 import type { DesktopConnectInfo, DesktopScanRecord, DesktopScanStatus } from './shared/desktop-api'
 
-const fallbackScannerUrl = 'http://192.168.1.10:8787/scan?token=ABC123'
+const fallbackScannerUrl = 'https://192.168.1.10:8787/scan?token=ABC123'
 const fallbackConnectInfo: DesktopConnectInfo = {
   status: 'starting',
   computerName: 'DESKTOP',
   ipAddress: '192.168.1.10',
   port: 8787,
+  protocol: 'https',
   scannerUrl: fallbackScannerUrl,
+  certificateUrl: 'https://192.168.1.10:8787/cert/phone-scan-local-cert.pem',
+  trustUrl: 'https://192.168.1.10:8787/trust',
   qrDataUrl: '',
   tokenPreview: 'ABC...123',
   connectedClients: 0,
@@ -324,7 +327,7 @@ function HomeScreen({
 
               <div className="info-list">
                 <InfoRow icon={<Laptop />} label="PC IP Address" value={connectInfo.ipAddress} />
-                <InfoRow icon={<Network />} label="Port" value={String(connectInfo.port)} />
+                <InfoRow icon={<Network />} label="Port" value={`${connectInfo.protocol.toUpperCase()} ${connectInfo.port}`} />
                 <InfoRow icon={<Wifi />} label="Connection Method" value="Wi-Fi / USB Tethering" />
               </div>
             </section>

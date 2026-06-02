@@ -40,6 +40,9 @@ type DesktopConnection = {
   computerName: string
   ipAddress: string
   port: string
+  protocol: 'http' | 'https'
+  certificateUrl: string
+  trustUrl: string
   error?: string
 }
 
@@ -63,6 +66,9 @@ function getInitialConnection(): DesktopConnection {
     computerName: 'Desktop',
     ipAddress: window.location.hostname || '192.168.1.15',
     port: window.location.port || '8787',
+    protocol: window.location.protocol === 'https:' ? 'https' : 'http',
+    certificateUrl: `${serverUrl}/cert/phone-scan-local-cert.pem`,
+    trustUrl: `${serverUrl}/trust`,
     error: token ? undefined : 'Missing desktop token.',
   }
 }
@@ -98,13 +104,23 @@ function App() {
       setConnection((current) => ({ ...current, connected: false, error: error.message }))
     })
 
-    socket.on('desktop:ready', (info: { computerName?: string; ipAddress?: string; port?: number }) => {
+    socket.on('desktop:ready', (info: {
+      computerName?: string
+      ipAddress?: string
+      port?: number
+      protocol?: 'http' | 'https'
+      certificateUrl?: string
+      trustUrl?: string
+    }) => {
       setConnection((current) => ({
         ...current,
         connected: true,
         computerName: info.computerName ?? current.computerName,
         ipAddress: info.ipAddress ?? current.ipAddress,
         port: info.port ? String(info.port) : current.port,
+        protocol: info.protocol ?? current.protocol,
+        certificateUrl: info.certificateUrl ?? current.certificateUrl,
+        trustUrl: info.trustUrl ?? current.trustUrl,
         error: undefined,
       }))
     })
@@ -317,6 +333,7 @@ function ScannerScreen({
   const controlsRef = useRef<IScannerControls | null>(null)
   const [scannerActive, setScannerActive] = useState(false)
   const [scanMessage, setScanMessage] = useState('Align the barcode within the frame.')
+  const cameraNeedsTrustedHttps = !window.isSecureContext
 
   useEffect(() => {
     return () => {
@@ -331,6 +348,11 @@ function ScannerScreen({
       controlsRef.current = null
       setScannerActive(false)
       setScanMessage('Scanner stopped.')
+      return
+    }
+
+    if (cameraNeedsTrustedHttps) {
+      setScanMessage('Camera needs trusted HTTPS. Install the Phone Scan certificate, then reopen this page.')
       return
     }
 
@@ -381,6 +403,8 @@ function ScannerScreen({
       </header>
 
       <DesktopStatusPill connection={connection} />
+
+      {cameraNeedsTrustedHttps && <CertificateNotice connection={connection} />}
 
       <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
         <video ref={videoRef} className="camera-video" muted playsInline />
@@ -719,6 +743,19 @@ function DesktopStatusPill({
       <em />
       <Wifi size={31} strokeWidth={2.4} />
       <strong>{connection.ipAddress}:{connection.port}</strong>
+    </section>
+  )
+}
+
+function CertificateNotice({ connection }: { connection: DesktopConnection }) {
+  return (
+    <section className="certificate-notice">
+      <Info size={28} strokeWidth={2.3} />
+      <div>
+        <strong>Camera needs trusted HTTPS</strong>
+        <p>Install the Phone Scan local certificate on this phone, then reopen the scanner.</p>
+      </div>
+      <a href={connection.trustUrl || connection.certificateUrl}>Setup</a>
     </section>
   )
 }

@@ -1,0 +1,32 @@
+appId: com.kt246.phonescan
+productName: Phone Scan
+copyright: Copyright (c) 2026 KT246
+
+directories:
+  output: release
+
+files:
+  - dist/**
+  - dist-electron/**
+  - package.json
+  - "!node_modules/electron/**"
+  - "!node_modules/electron"
+
+extraResources:
+  - from: ../scanner-pwa/dist
+    to: scanner-pwa
+
+win:
+  signAndEditExecutable: false
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Phone Scan
