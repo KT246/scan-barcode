@@ -36,7 +36,6 @@ import {
   ShieldCheck,
   Smartphone,
   Trash2,
-  Usb,
   Wrench,
   Wifi,
   X,
@@ -648,7 +647,7 @@ function SettingsScreen({
 
             <section className="settings-card general-card">
               <CardTitle icon={<ShieldCheck size={25} />} title="Connection Requirements" />
-              <SettingsRow title="Network" description="Phone and desktop must be on the same Wi-Fi or USB tethering">
+              <SettingsRow title="Network" description="Phone and desktop must be on the same Wi-Fi network">
                 <ReadOnlyValue value="Local only" wide />
               </SettingsRow>
               <SettingsRow title="Certificate" description="Install local certificate if phone camera is blocked" last>
@@ -671,7 +670,7 @@ function HelpScreen() {
   ]
 
   const issues = [
-    { icon: <AlertCircle />, title: 'Phone cannot connect', description: 'Check that both devices are on the same network or USB is connected.', tone: 'red' },
+    { icon: <AlertCircle />, title: 'Phone cannot connect', description: 'Check that both devices are connected to the same Wi-Fi network.', tone: 'red' },
     { icon: <LockKeyhole />, title: 'Camera permission denied', description: 'Allow camera permission to scan the QR code.', tone: 'orange' },
     { icon: <QrCode />, title: 'QR not opening', description: 'Use your default browser or try scanning again.', tone: 'amber' },
     { icon: <ScanBarcode />, title: 'Barcode not typed into input', description: 'Make sure the input is focused before scanning.', tone: 'rose' },
@@ -718,17 +717,9 @@ function HelpScreen() {
                 <p>Recommended for most users.</p>
               </div>
             </div>
-            <div className="method-card">
-              <Usb size={48} />
-              <div>
-                <strong>USB Tethering</strong>
-                <p>Connect your phone via USB and enable</p>
-                <p>USB Tethering for a stable connection.</p>
-              </div>
-            </div>
             <div className="connection-note">
               <Info size={22} />
-              <span>You can change the connection method on the Home screen.</span>
+              <span>Use a Wi-Fi network that allows devices to discover each other.</span>
             </div>
           </section>
 

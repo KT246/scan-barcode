@@ -37,7 +37,7 @@ export const desktopCopy = {
       pcIpAddress: 'PC IP Address',
       port: 'Port',
       connectionMethod: 'Connection Method',
-      connectionMethodValue: 'Wi-Fi / USB Tethering',
+      connectionMethodValue: 'Wi-Fi local connection',
     },
     instructions: {
       title: 'Quick Instructions',
@@ -95,7 +95,7 @@ export const desktopCopy = {
       pcIpAddress: 'ທີ່ຢູ່ IP ຂອງ PC',
       port: 'ພອດ',
       connectionMethod: 'ວິທີເຊື່ອມຕໍ່',
-      connectionMethodValue: 'Wi-Fi / USB Tethering',
+      connectionMethodValue: 'ເຊື່ອມຕໍ່ຜ່ານ Wi-Fi',
     },
     instructions: {
       title: 'ຄໍາແນະນໍາດ່ວນ',

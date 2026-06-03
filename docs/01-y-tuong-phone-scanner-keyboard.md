@@ -36,7 +36,7 @@ Dự án này giải quyết bằng cách dùng:
 
 - Điện thoại để scan barcode.
 - Desktop Tool để nhận barcode và giả lập bàn phím.
-- Kết nối local qua cùng Wi-Fi hoặc USB tethering.
+- Kết nối local qua cùng mạng Wi-Fi.
 
 ---
 
@@ -69,7 +69,7 @@ MVP tập trung vào tính năng cốt lõi:
 2. Desktop Tool hiển thị QR Code kết nối.
 3. Điện thoại scan QR để mở PWA Scanner.
 4. PWA dùng camera điện thoại để scan barcode.
-5. PWA gửi barcode về Desktop Tool qua cùng Wi-Fi hoặc USB tethering.
+5. PWA gửi barcode về Desktop Tool qua cùng mạng Wi-Fi.
 6. Desktop Tool giả lập bàn phím và nhập barcode vào ô đang focus.
 7. Có tùy chọn Auto Enter hoặc Auto Tab sau khi nhập.
 8. Hiển thị lịch sử các barcode vừa scan.
@@ -98,7 +98,7 @@ MVP chỉ cần hoạt động theo kiểu:
 
 ```text
 Phone PWA React Camera
-   ↓ cùng Wi-Fi / USB tethering
+   ↓ cùng mạng Wi-Fi
 Desktop Tool trên máy tính
    ↓ local server trong tool
    ↓ keyboard injector
@@ -131,7 +131,7 @@ Giá trị của sản phẩm:
 - Không cần server cloud.
 - Dễ dùng: mở tool, scan QR, dùng ngay.
 - Dùng được với nhiều phần mềm khác nhau.
-- Có thể chạy qua Wi-Fi hoặc USB tethering.
+- Hoạt động qua kết nối Wi-Fi local.
 
 ---
 

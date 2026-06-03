@@ -408,7 +408,7 @@ Auto Tab: On/Off
 Suffix: None / Enter / Tab
 Typing Delay: 0ms / 10ms / 30ms
 Port: 8787
-Connection Mode: Wi-Fi / USB tethering
+Connection Mode: Wi-Fi local connection
 ```
 
 ---
@@ -485,7 +485,7 @@ Flow chính thức:
 ```text
 Phone PWA React Camera
    ↓ scan barcode bằng camera
-Socket.IO qua cùng Wi-Fi / USB tethering
+Socket.IO qua cùng mạng Wi-Fi
    ↓
 Desktop Tool local server
    ↓

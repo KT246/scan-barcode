@@ -4,7 +4,7 @@
 
 ```text
 Phone PWA React Camera
-   ↓ cùng Wi-Fi / USB tethering
+   ↓ cùng mạng Wi-Fi
 Desktop Tool trên máy tính
    ↓ local server trong tool
    ↓ keyboard injector
@@ -96,8 +96,8 @@ Hiển thị trạng thái Connected
 
 Điện thoại và máy tính phải ở cùng mạng:
 
-- Cùng Wi-Fi
-- Hoặc USB tethering
+- Cùng mạng Wi-Fi
+- Wi-Fi cho phép các thiết bị trong mạng nhìn thấy nhau
 
 ---
 
@@ -216,27 +216,25 @@ Tool nhận barcode và gõ vào máy tính
 
 ---
 
-## 9. Flow qua USB tethering
+## 9. Điều kiện Wi-Fi local
 
 ```text
-Cắm điện thoại vào máy tính bằng USB
+Điện thoại và máy tính cùng Wi-Fi
    ↓
-Bật USB tethering trên điện thoại
+Wi-Fi cho phép thiết bị nội bộ kết nối với nhau
    ↓
-Điện thoại và máy tính có mạng nội bộ qua USB
+Desktop Tool mở port local
    ↓
-Tool tạo QR với IP phù hợp
+Điện thoại truy cập link từ QR
    ↓
-Điện thoại mở PWA Scanner
-   ↓
-Scan barcode và gửi về tool
+Scan barcode và gửi về desktop
 ```
 
-USB tethering dùng khi:
+Lưu ý cho mạng Wi-Fi:
 
-- Wi-Fi không ổn định.
-- Wi-Fi chặn thiết bị thấy nhau.
-- Người dùng muốn kết nối ổn định hơn.
+- Tắt Client Isolation/AP Isolation nếu router đang bật.
+- Cho phép Desktop Tool qua Windows Firewall.
+- Nếu IP desktop đổi, refresh QR trong Desktop Tool.
 
 ---
 
@@ -254,7 +252,7 @@ Nguyên nhân có thể:
 Cách xử lý:
 
 - Kiểm tra điện thoại và máy tính cùng Wi-Fi.
-- Thử dùng USB tethering.
+- Tắt Client Isolation/AP Isolation trên router nếu cần.
 - Cho phép Desktop Tool qua Windows Firewall.
 - Restart tool.
 
@@ -305,6 +303,6 @@ Cách xử lý:
 6. PWA mở camera bằng React component.
 7. Người dùng click ô input trên máy tính.
 8. Điện thoại scan barcode.
-9. PWA gửi barcode về tool qua Wi-Fi/USB tethering.
+9. PWA gửi barcode về tool qua Wi-Fi.
 10. Tool dùng keyboard injector để gõ barcode vào ô đang focus.
 ```
