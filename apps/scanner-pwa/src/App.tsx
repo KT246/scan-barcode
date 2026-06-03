@@ -66,6 +66,8 @@ type BeforeInstallPromptEvent = Event & {
 type ScannerSettings = {
   autoSend: boolean
   duplicateLock: boolean
+  enable1D: boolean
+  enable2D: boolean
   scanIntervalMs: number
 }
 
@@ -74,9 +76,11 @@ const scannerSettingsStorageKey = 'phone-scan.scanner-settings'
 const defaultScannerSettings: ScannerSettings = {
   autoSend: true,
   duplicateLock: true,
+  enable1D: true,
+  enable2D: true,
   scanIntervalMs: 1000,
 }
-const supportedScanFormats = [
+const oneDimensionalScanFormats = [
   BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
   BarcodeFormat.CODE_93,
@@ -89,19 +93,14 @@ const supportedScanFormats = [
   BarcodeFormat.UPC_A,
   BarcodeFormat.UPC_E,
   BarcodeFormat.UPC_EAN_EXTENSION,
+]
+const twoDimensionalScanFormats = [
   BarcodeFormat.QR_CODE,
   BarcodeFormat.DATA_MATRIX,
   BarcodeFormat.AZTEC,
   BarcodeFormat.PDF_417,
   BarcodeFormat.MAXICODE,
 ]
-const barcodeReaderHints = new Map<DecodeHintType, unknown>([
-  [DecodeHintType.POSSIBLE_FORMATS, supportedScanFormats],
-  [DecodeHintType.TRY_HARDER, true],
-  [DecodeHintType.ENABLE_CODE_39_EXTENDED_MODE, true],
-  [DecodeHintType.ASSUME_GS1, true],
-  [DecodeHintType.RETURN_CODABAR_START_END, true],
-])
 const barcodeReaderOptions = {
   delayBetweenScanAttempts: 45,
   delayBetweenScanSuccess: 260,
@@ -128,8 +127,25 @@ function getScanType(format: BarcodeFormat | null | undefined): LastScan['type']
   return format === BarcodeFormat.QR_CODE ? 'qr' : 'barcode'
 }
 
-function isSupportedScanFormat(format: BarcodeFormat | null | undefined) {
-  return format == null || supportedScanFormats.includes(format)
+function getEnabledScanFormats(settings: ScannerSettings) {
+  return [
+    ...(settings.enable1D ? oneDimensionalScanFormats : []),
+    ...(settings.enable2D ? twoDimensionalScanFormats : []),
+  ]
+}
+
+function createBarcodeReaderHints(settings: ScannerSettings) {
+  return new Map<DecodeHintType, unknown>([
+    [DecodeHintType.POSSIBLE_FORMATS, getEnabledScanFormats(settings)],
+    [DecodeHintType.TRY_HARDER, true],
+    [DecodeHintType.ENABLE_CODE_39_EXTENDED_MODE, true],
+    [DecodeHintType.ASSUME_GS1, true],
+    [DecodeHintType.RETURN_CODABAR_START_END, true],
+  ])
+}
+
+function isSupportedScanFormat(format: BarcodeFormat | null | undefined, settings: ScannerSettings) {
+  return format == null || getEnabledScanFormats(settings).includes(format)
 }
 
 const pwaText = {
@@ -202,7 +218,13 @@ const pwaText = {
     couldNotSendDesktop: 'Could not send barcode to desktop.',
     networkFailed: 'Network request failed.',
     scannerSettings: 'Scanner Settings',
-    barcodeOnlyBehavior: 'Barcode-only camera behavior',
+    barcodeOnlyBehavior: 'Choose which code formats the camera should read.',
+    scanFormats: 'Scan formats',
+    scanFormatsHint: 'Turn on only the formats you need for faster scanning.',
+    enable1D: '1D barcodes',
+    enable1DHint: 'EAN, UPC, Code 128, Code 39, ITF and similar barcodes.',
+    enable2D: '2D codes',
+    enable2DHint: 'QR, Data Matrix, Aztec, PDF417 and similar codes.',
     scanInterval: 'Scan interval',
     scanIntervalHint: 'Minimum delay before accepting the next read.',
     ignoreDuplicates: 'Ignore duplicates',
@@ -295,7 +317,13 @@ const pwaText = {
     couldNotSendDesktop: 'ສົ່ງ barcode ໄປ desktop ບໍ່ໄດ້.',
     networkFailed: 'Network request failed.',
     scannerSettings: 'ຕັ້ງຄ່າສະແກນ',
-    barcodeOnlyBehavior: 'ພຶດຕິກຳກ້ອງສຳລັບ barcode ເທົ່ານັ້ນ',
+    barcodeOnlyBehavior: 'ເລືອກປະເພດລະຫັດທີ່ກ້ອງຈະອ່ານ.',
+    scanFormats: 'ປະເພດລະຫັດສະແກນ',
+    scanFormatsHint: 'ເປີດສະເພາະປະເພດທີ່ຕ້ອງໃຊ້ ເພື່ອໃຫ້ສະແກນໄວຂຶ້ນ.',
+    enable1D: 'Barcode 1D',
+    enable1DHint: 'EAN, UPC, Code 128, Code 39, ITF ແລະ barcode ຄ້າຍຄືກັນ.',
+    enable2D: 'ລະຫັດ 2D',
+    enable2DHint: 'QR, Data Matrix, Aztec, PDF417 ແລະລະຫັດຄ້າຍຄືກັນ.',
     scanInterval: 'ໄລຍະຫ່າງການສະແກນ',
     scanIntervalHint: 'ເວລາຂັ້ນຕ່ຳກ່ອນຮັບການອ່ານຄັ້ງຕໍ່ໄປ.',
     ignoreDuplicates: 'ຂ້າມຄ່າຊ້ຳ',
@@ -509,10 +537,18 @@ function normalizeScannerSettings(settings: Partial<ScannerSettings>): ScannerSe
   const scanIntervalMs = Number.isFinite(settings.scanIntervalMs)
     ? Math.max(200, Math.min(10000, Math.round(settings.scanIntervalMs ?? defaultScannerSettings.scanIntervalMs)))
     : defaultScannerSettings.scanIntervalMs
+  let enable1D = settings.enable1D ?? defaultScannerSettings.enable1D
+  const enable2D = settings.enable2D ?? defaultScannerSettings.enable2D
+
+  if (!enable1D && !enable2D) {
+    enable1D = true
+  }
 
   return {
     autoSend: settings.autoSend ?? defaultScannerSettings.autoSend,
     duplicateLock: settings.duplicateLock ?? defaultScannerSettings.duplicateLock,
+    enable1D,
+    enable2D,
     scanIntervalMs,
   }
 }
@@ -1218,7 +1254,7 @@ function ScannerScreen({
     }
 
     try {
-      const reader = new BrowserMultiFormatReader(barcodeReaderHints, barcodeReaderOptions)
+      const reader = new BrowserMultiFormatReader(createBarcodeReaderHints(settingsRef.current), barcodeReaderOptions)
       scanInFlightRef.current = false
       setScannerActive(true)
       setScanMessage(t('scanningBarcodeOnly'))
@@ -1233,8 +1269,9 @@ function ScannerScreen({
           const value = result.getText().trim()
           const format = result.getBarcodeFormat()
           const scanType = getScanType(format)
+          const activeSettings = settingsRef.current
 
-          if (!value || !isSupportedScanFormat(format)) {
+          if (!value || !isSupportedScanFormat(format, activeSettings)) {
             return
           }
 
@@ -1247,7 +1284,6 @@ function ScannerScreen({
 
           const timestamp = Date.now()
           const lastAcceptedScan = lastAcceptedScanRef.current
-          const activeSettings = settingsRef.current
           const elapsedSinceLastScan = lastAcceptedScan ? timestamp - lastAcceptedScan.at : Number.POSITIVE_INFINITY
 
           if (lastAcceptedScan && elapsedSinceLastScan < activeSettings.scanIntervalMs) {
@@ -1307,7 +1343,7 @@ function ScannerScreen({
     return () => {
       stopScanner()
     }
-  }, [])
+  }, [scannerSettings.enable1D, scannerSettings.enable2D])
 
   return (
     <div className="scanner-content">
@@ -1383,6 +1419,35 @@ function SettingsScreen({
             <span>{t('barcodeOnlyBehavior')}</span>
           </div>
         </div>
+
+        <div className="scanner-setting-section">
+          <strong>{t('scanFormats')}</strong>
+          <small>{t('scanFormatsHint')}</small>
+        </div>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>{t('enable1D')}</strong>
+            <small>{t('enable1DHint')}</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={scannerSettings.enable1D}
+            onChange={(event) => updateScannerSettings({ enable1D: event.target.checked })}
+          />
+        </label>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>{t('enable2D')}</strong>
+            <small>{t('enable2DHint')}</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={scannerSettings.enable2D}
+            onChange={(event) => updateScannerSettings({ enable2D: event.target.checked })}
+          />
+        </label>
 
         <label className="scanner-setting-row">
           <span>

@@ -1103,12 +1103,25 @@ a {
 }
 
 .scanner-settings-header span,
-.scanner-setting-row small {
+.scanner-setting-row small,
+.scanner-setting-section small {
   display: block;
   margin-top: 4px;
   color: #5f6f8d;
   font-size: 16px;
   line-height: 1.25;
+}
+
+.scanner-setting-section {
+  padding-top: 14px;
+  border-top: 1px solid #e3eaf3;
+}
+
+.scanner-setting-section strong {
+  display: block;
+  color: var(--blue);
+  font-size: 18px;
+  font-weight: 780;
 }
 
 .scanner-settings-header button {
@@ -3025,8 +3038,17 @@ a {
 }
 
 .app-screen .scanner-settings-header span,
-.app-screen .scanner-setting-row small {
+.app-screen .scanner-setting-row small,
+.app-screen .scanner-setting-section small {
   font-size: 12px;
+}
+
+.app-screen .scanner-setting-section {
+  padding-top: 10px;
+}
+
+.app-screen .scanner-setting-section strong {
+  font-size: 14px;
 }
 
 .app-screen .scanner-settings-header button {
