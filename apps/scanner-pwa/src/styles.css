@@ -3139,10 +3139,15 @@ a {
 }
 
 .app-screen .last-scanned {
-  height: 104px;
-  grid-template-columns: 58px 1fr 126px;
+  height: auto;
+  min-height: 0;
+  grid-template-columns: 56px minmax(0, 1fr);
   gap: 12px;
-  padding: 0 16px;
+  padding: 14px;
+}
+
+.app-screen .last-scanned-copy {
+  min-width: 0;
 }
 
 .app-screen .scan-success-icon {
@@ -3157,23 +3162,46 @@ a {
 
 .app-screen .last-scanned p,
 .app-screen .last-scanned time {
-  font-size: 14px;
+  display: block;
+  font-size: 15px;
+  line-height: 1.35;
 }
 
 .app-screen .last-scanned strong {
-  font-size: 20px;
+  margin-bottom: 6px;
+  font-size: clamp(22px, 6vw, 27px);
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-variant-numeric: tabular-nums;
 }
 
 .app-screen .last-scanned button {
-  height: 42px;
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 48px;
   gap: 8px;
-  font-size: 15px;
+  border-radius: 12px;
+  font-size: 17px;
+  line-height: 1.1;
+}
+
+.app-screen .last-scanned button svg {
+  width: 24px;
+  height: 24px;
+}
+
+.app-screen .last-scanned button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .app-screen .scan-tips {
-  min-height: 104px;
+  min-height: 0;
   grid-template-columns: 1fr 92px;
-  padding: 14px 16px;
+  padding: 14px;
 }
 
 .app-screen .compact-scan-tips {
@@ -3183,15 +3211,18 @@ a {
 
 .app-screen .tips-title {
   gap: 8px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .app-screen .tips-title strong {
-  font-size: 17px;
+  font-size: 18px;
+  line-height: 1.2;
 }
 
 .app-screen .scan-tips p {
-  font-size: 14px;
+  font-size: 15px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .app-screen .tips-barcode-art {

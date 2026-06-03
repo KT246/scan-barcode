@@ -1034,7 +1034,7 @@ function ScannerScreen({
           <span className="scan-success-icon">
             <Barcode size={46} strokeWidth={2.4} />
           </span>
-          <div>
+          <div className="last-scanned-copy">
             <p>{t('lastScanned')}</p>
             <strong>{lastScan?.value ?? t('noBarcodeYet')}</strong>
             <time>{lastScan ? `${t('today')}, ${lastScan.time}` : t('waitingForScan')}</time>
