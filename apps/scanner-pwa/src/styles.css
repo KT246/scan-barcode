@@ -730,6 +730,60 @@ a {
   border-radius: 0 0 20px 20px;
 }
 
+.install-pwa-card {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 18px;
+  margin-top: 20px;
+  padding: 20px;
+}
+
+.install-pwa-icon {
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: var(--blue-dark);
+  background: #e8f1ff;
+}
+
+.install-pwa-copy {
+  min-width: 0;
+}
+
+.install-pwa-copy strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 780;
+  line-height: 1.2;
+}
+
+.install-pwa-copy p {
+  margin: 0;
+  color: #53617d;
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.install-pwa-card button {
+  min-width: 118px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 11px;
+  color: #fff;
+  background: var(--blue);
+  font-size: 14px;
+  font-weight: 760;
+}
+
 .how-card {
   min-height: 263px;
   margin-top: 20px;
@@ -2797,6 +2851,40 @@ a {
   width: 42px;
   height: 4px;
   border-bottom-width: 2px;
+}
+
+.app-screen .install-pwa-card {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 12px;
+  margin-top: 14px;
+  padding: 14px;
+}
+
+.app-screen .install-pwa-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+}
+
+.app-screen .install-pwa-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+.app-screen .install-pwa-copy strong {
+  font-size: 15px;
+}
+
+.app-screen .install-pwa-copy p {
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.app-screen .install-pwa-card button {
+  grid-column: 1 / -1;
+  width: 100%;
+  height: 44px;
+  font-size: 14px;
 }
 
 .app-screen .how-body {

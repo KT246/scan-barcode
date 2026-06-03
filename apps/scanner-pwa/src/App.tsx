@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { BrowserMultiFormatOneDReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
+import { BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
 import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
+  Download,
   Info,
   Languages,
   Link2,
@@ -11,6 +12,7 @@ import {
   Send,
   Settings,
   ScanLine,
+  Smartphone,
   Wifi,
   X,
 } from 'lucide-react'
@@ -56,6 +58,11 @@ type SendResult = {
 
 type SendBarcode = (value: string, type: LastScan['type'], timestamp?: number) => Promise<SendResult>
 
+type BeforeInstallPromptEvent = Event & {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed'; platform: string }>
+}
+
 type ScannerSettings = {
   autoSend: boolean
   duplicateLock: boolean
@@ -69,11 +76,11 @@ const defaultScannerSettings: ScannerSettings = {
   duplicateLock: true,
   scanIntervalMs: 1000,
 }
-const supportedBarcodeFormats = [
-  BarcodeFormat.CODABAR,
+const supportedScanFormats = [
+  BarcodeFormat.CODE_128,
   BarcodeFormat.CODE_39,
   BarcodeFormat.CODE_93,
-  BarcodeFormat.CODE_128,
+  BarcodeFormat.CODABAR,
   BarcodeFormat.EAN_8,
   BarcodeFormat.EAN_13,
   BarcodeFormat.ITF,
@@ -82,11 +89,17 @@ const supportedBarcodeFormats = [
   BarcodeFormat.UPC_A,
   BarcodeFormat.UPC_E,
   BarcodeFormat.UPC_EAN_EXTENSION,
+  BarcodeFormat.QR_CODE,
+  BarcodeFormat.DATA_MATRIX,
+  BarcodeFormat.AZTEC,
+  BarcodeFormat.PDF_417,
+  BarcodeFormat.MAXICODE,
 ]
 const barcodeReaderHints = new Map<DecodeHintType, unknown>([
-  [DecodeHintType.POSSIBLE_FORMATS, supportedBarcodeFormats],
+  [DecodeHintType.POSSIBLE_FORMATS, supportedScanFormats],
   [DecodeHintType.TRY_HARDER, true],
   [DecodeHintType.ENABLE_CODE_39_EXTENDED_MODE, true],
+  [DecodeHintType.ASSUME_GS1, true],
   [DecodeHintType.RETURN_CODABAR_START_END, true],
 ])
 const barcodeReaderOptions = {
@@ -111,8 +124,12 @@ const barcodeVideoConstraints: MediaStreamConstraints = {
   },
 }
 
-function isSupportedBarcodeFormat(format: BarcodeFormat | null | undefined) {
-  return format == null || supportedBarcodeFormats.includes(format)
+function getScanType(format: BarcodeFormat | null | undefined): LastScan['type'] {
+  return format === BarcodeFormat.QR_CODE ? 'qr' : 'barcode'
+}
+
+function isSupportedScanFormat(format: BarcodeFormat | null | undefined) {
+  return format == null || supportedScanFormats.includes(format)
 }
 
 const pwaText = {
@@ -145,6 +162,10 @@ const pwaText = {
     stepUseScanner: 'After connected, use Scanner for product barcodes only.',
     openBarcodeScanner: 'Open Barcode Scanner',
     desktopReady: 'Desktop is connected. You can open the barcode scanner.',
+    installPwaTitle: 'Install on this phone',
+    installPwaBody: 'Add Phone Scan to your home screen for faster scanning.',
+    installPwaButton: 'Install app',
+    installPwaManualHint: 'If install is not available, open the browser menu and choose Add to Home Screen.',
     connectionQrScannerStopped: 'Connection QR scanner stopped.',
     cameraNeedsHttpsConnect: 'Camera needs HTTPS. Open this page from HTTPS before scanning the desktop QR.',
     scanningDesktopConnectionQr: 'Scanning desktop connection QR...',
@@ -155,9 +176,9 @@ const pwaText = {
     installCertificate: 'Install the Phone Scan local certificate on this phone, then reopen the scanner.',
     setup: 'Setup',
     trustedHttpsMessage: 'Camera needs trusted HTTPS. Install the Phone Scan certificate, then reopen this page.',
-    alignBarcode: 'Align the barcode within the frame.',
-    scanningBarcodeOnly: 'Scanning barcode only...',
-    qrIgnored: 'QR ignored. Use the Connect tab to scan desktop QR.',
+    alignBarcode: 'Align the code within the frame.',
+    scanningBarcodeOnly: 'Scanning 1D and 2D codes...',
+    qrIgnored: 'Phone Scan connection QR ignored. Use the Connect tab for desktop QR.',
     duplicateBarcodeIgnored: 'Duplicate barcode ignored.',
     autoSendOff: 'Barcode scanned. Auto send is off.',
     barcodeScannedNoDesktop: 'Barcode scanned, but desktop is not connected.',
@@ -231,9 +252,13 @@ const pwaText = {
     beforeScanning: 'ກ່ອນສະແກນ',
     stepWifi: 'ໃຫ້ໂທລະສັບ ແລະ ຄອມຢູ່ Wi-Fi ດຽວກັນ ຫຼື USB tethering.',
     stepScanQr: 'ສະແກນ QR ຈາກ Phone Scan Desktop ໃນໜ້າ Connect.',
-    stepUseScanner: 'ຫຼັງຈາກເຊື່ອມແລ້ວ ໃຊ້ Scanner ສຳລັບ barcode ສິນຄ້າເທົ່ານັ້ນ.',
+    stepUseScanner: 'ຫຼັງຈາກເຊື່ອມແລ້ວ ໃຊ້ Scanner ເພື່ອສະແກນລະຫັດ 1D ແລະ 2D.',
     openBarcodeScanner: 'ເປີດສະແກນ Barcode',
     desktopReady: 'ເຄື່ອງຄອມເຊື່ອມຕໍ່ແລ້ວ. ສາມາດເປີດສະແກນ barcode ໄດ້.',
+    installPwaTitle: 'ຕິດຕັ້ງໃນໂທລະສັບນີ້',
+    installPwaBody: 'ເພີ່ມ Phone Scan ໄວ້ໜ້າຈໍຫຼັກ ເພື່ອສະແກນໄດ້ໄວຂຶ້ນ.',
+    installPwaButton: 'ຕິດຕັ້ງແອັບ',
+    installPwaManualHint: 'ຖ້າບໍ່ມີປຸ່ມຕິດຕັ້ງ ໃຫ້ເປີດເມນູ browser ແລ້ວເລືອກ Add to Home Screen.',
     connectionQrScannerStopped: 'ຢຸດສະແກນ QR ເຊື່ອມຕໍ່ແລ້ວ.',
     cameraNeedsHttpsConnect: 'ກ້ອງຕ້ອງໃຊ້ HTTPS. ເປີດໜ້ານີ້ຜ່ານ HTTPS ກ່ອນສະແກນ QR ຈາກຄອມ.',
     scanningDesktopConnectionQr: 'ກຳລັງສະແກນ QR ເຊື່ອມຕໍ່ຈາກຄອມ...',
@@ -244,9 +269,9 @@ const pwaText = {
     installCertificate: 'ຕິດຕັ້ງ certificate ຂອງ Phone Scan ໃນໂທລະສັບນີ້ ແລ້ວເປີດ scanner ອີກຄັ້ງ.',
     setup: 'ຕັ້ງຄ່າ',
     trustedHttpsMessage: 'ກ້ອງຕ້ອງການ HTTPS ທີ່ໄວ້ໃຈໄດ້. ຕິດຕັ້ງ certificate ແລ້ວເປີດໜ້ານີ້ອີກຄັ້ງ.',
-    alignBarcode: 'ວາງ barcode ໃຫ້ຢູ່ໃນກອບ.',
-    scanningBarcodeOnly: 'ກຳລັງສະແກນ barcode ເທົ່ານັ້ນ...',
-    qrIgnored: 'ຂ້າມ QR. ໃຊ້ໜ້າ Connect ເພື່ອສະແກນ QR ຈາກຄອມ.',
+    alignBarcode: 'ວາງລະຫັດໃຫ້ຢູ່ໃນກອບ.',
+    scanningBarcodeOnly: 'ກຳລັງສະແກນລະຫັດ 1D ແລະ 2D...',
+    qrIgnored: 'ຂ້າມ QR ເຊື່ອມຕໍ່ Phone Scan. ໃຊ້ໜ້າ Connect ສຳລັບ QR ຈາກຄອມ.',
     duplicateBarcodeIgnored: 'ຂ້າມ barcode ທີ່ຊ້ຳ.',
     autoSendOff: 'ສະແກນ barcode ແລ້ວ. Auto send ປິດຢູ່.',
     barcodeScannedNoDesktop: 'ສະແກນ barcode ແລ້ວ ແຕ່ desktop ຍັງບໍ່ເຊື່ອມ.',
@@ -514,6 +539,12 @@ function getInitialAppLanguage(): AppLanguage {
   }
 }
 
+function isPwaStandalone() {
+  const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
+
+  return window.matchMedia('(display-mode: standalone)').matches || navigatorWithStandalone.standalone === true
+}
+
 function formatScanTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -568,11 +599,58 @@ function ScannerApp() {
     state: 'idle',
     message: t('noBarcodeSent'),
   })
+  const [installPrompt, setInstallPrompt] = useState<BeforeInstallPromptEvent | null>(null)
+  const [appInstalled, setAppInstalled] = useState(() => isPwaStandalone())
   const socketRef = useRef<Socket | null>(null)
 
   const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
     setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
   }
+
+  const installPwa = async () => {
+    if (!installPrompt) {
+      return
+    }
+
+    try {
+      await installPrompt.prompt()
+      const choice = await installPrompt.userChoice
+
+      setInstallPrompt(null)
+
+      if (choice.outcome === 'accepted') {
+        setAppInstalled(true)
+      }
+    } catch {
+      setInstallPrompt(null)
+    }
+  }
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (event: Event) => {
+      event.preventDefault()
+      setInstallPrompt(event as BeforeInstallPromptEvent)
+      setAppInstalled(false)
+    }
+    const handleAppInstalled = () => {
+      setInstallPrompt(null)
+      setAppInstalled(true)
+    }
+    const displayModeQuery = window.matchMedia('(display-mode: standalone)')
+    const handleDisplayModeChange = () => {
+      setAppInstalled(isPwaStandalone())
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+    window.addEventListener('appinstalled', handleAppInstalled)
+    displayModeQuery.addEventListener('change', handleDisplayModeChange)
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt)
+      window.removeEventListener('appinstalled', handleAppInstalled)
+      displayModeQuery.removeEventListener('change', handleDisplayModeChange)
+    }
+  }, [])
 
   useEffect(() => {
     const unlockAudio = () => {
@@ -807,7 +885,16 @@ function ScannerApp() {
             t={t}
           />
         ) : (
-          <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} t={t} />
+          <ConnectScreen
+            appInstalled={appInstalled}
+            connection={connection}
+            installPrompt={installPrompt}
+            lastScan={lastScan}
+            lastSend={lastSend}
+            onInstallPwa={installPwa}
+            setPage={setPage}
+            t={t}
+          />
         )}
 
         <MobileTabs page={page} setPage={setPage} t={t} />
@@ -856,15 +943,21 @@ function AppNavbar({
 }
 
 function ConnectScreen({
+  appInstalled,
   connection,
+  installPrompt,
   lastScan,
   lastSend,
+  onInstallPwa,
   setPage,
   t,
 }: {
+  appInstalled: boolean
   connection: DesktopConnection
+  installPrompt: BeforeInstallPromptEvent | null
   lastScan: LastScan | null
   lastSend: LastSend
+  onInstallPwa: () => void
   setPage: (page: MobilePage) => void
   t: Translate
 }) {
@@ -973,6 +1066,10 @@ function ConnectScreen({
         </div>
       </section>
 
+      {!appInstalled && (
+        <InstallPwaCard installPrompt={installPrompt} onInstallPwa={onInstallPwa} t={t} />
+      )}
+
       <section className="connect-card connect-qr-scanner-card">
         <div className="mobile-card-title">
           <span className="info-dot">QR</span>
@@ -1020,6 +1117,34 @@ function ConnectScreen({
 
       <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} t={t} />
     </div>
+  )
+}
+
+function InstallPwaCard({
+  installPrompt,
+  onInstallPwa,
+  t,
+}: {
+  installPrompt: BeforeInstallPromptEvent | null
+  onInstallPwa: () => void
+  t: Translate
+}) {
+  return (
+    <section className="connect-card install-pwa-card">
+      <span className="install-pwa-icon">
+        <Smartphone size={28} strokeWidth={2.3} />
+      </span>
+      <div className="install-pwa-copy">
+        <strong>{t('installPwaTitle')}</strong>
+        <p>{installPrompt ? t('installPwaBody') : t('installPwaManualHint')}</p>
+      </div>
+      {installPrompt && (
+        <button type="button" onClick={onInstallPwa}>
+          <Download size={20} strokeWidth={2.4} />
+          <span>{t('installPwaButton')}</span>
+        </button>
+      )}
+    </section>
   )
 }
 
@@ -1093,7 +1218,7 @@ function ScannerScreen({
     }
 
     try {
-      const reader = new BrowserMultiFormatOneDReader(barcodeReaderHints, barcodeReaderOptions)
+      const reader = new BrowserMultiFormatReader(barcodeReaderHints, barcodeReaderOptions)
       scanInFlightRef.current = false
       setScannerActive(true)
       setScanMessage(t('scanningBarcodeOnly'))
@@ -1107,8 +1232,9 @@ function ScannerScreen({
 
           const value = result.getText().trim()
           const format = result.getBarcodeFormat()
+          const scanType = getScanType(format)
 
-          if (!value || !isSupportedBarcodeFormat(format)) {
+          if (!value || !isSupportedScanFormat(format)) {
             return
           }
 
@@ -1124,13 +1250,9 @@ function ScannerScreen({
           const activeSettings = settingsRef.current
           const elapsedSinceLastScan = lastAcceptedScan ? timestamp - lastAcceptedScan.at : Number.POSITIVE_INFINITY
 
-          if (
-            lastAcceptedScan
-            && elapsedSinceLastScan < activeSettings.scanIntervalMs
-            && (lastAcceptedScan.value !== value || activeSettings.duplicateLock)
-          ) {
+          if (lastAcceptedScan && elapsedSinceLastScan < activeSettings.scanIntervalMs) {
             setScanMessage(
-              lastAcceptedScan.value === value
+              lastAcceptedScan.value === value && activeSettings.duplicateLock
                 ? t('duplicateBarcodeIgnored')
                 : `Waiting ${Math.ceil((activeSettings.scanIntervalMs - elapsedSinceLastScan) / 1000)}s before next scan.`,
             )
@@ -1141,7 +1263,7 @@ function ScannerScreen({
           lastAcceptedScanRef.current = { value, at: timestamp }
 
           try {
-            recordLocalScanRef.current(value, 'barcode', timestamp)
+            recordLocalScanRef.current(value, scanType, timestamp)
             playBarcodeScanFeedback()
 
             if (!activeSettings.autoSend) {
@@ -1151,12 +1273,12 @@ function ScannerScreen({
 
             if (!connectionRef.current.connected) {
               setScanMessage(t('barcodeScannedNoDesktop'))
-              await sendBarcodeRef.current(value, 'barcode', timestamp)
+              await sendBarcodeRef.current(value, scanType, timestamp)
               return
             }
 
             setScanMessage(t('barcodeSending'))
-            const sendResult = await sendBarcodeRef.current(value, 'barcode', timestamp)
+            const sendResult = await sendBarcodeRef.current(value, scanType, timestamp)
             setScanMessage(
               sendResult.delivered
                 ? sendResult.typed
