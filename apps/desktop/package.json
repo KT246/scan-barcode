@@ -2,6 +2,7 @@
   "name": "@web-barcode/desktop",
   "private": true,
   "version": "0.1.0",
+  "productName": "Phone Scan",
   "description": "Phone Scan desktop barcode bridge.",
   "author": "KT246 <tayattapeu@gmail.com>",
   "type": "module",
@@ -41,6 +42,7 @@
     "cross-env": "^10.1.0",
     "electron": "^42.3.1",
     "esbuild": "^0.28.0",
+    "rcedit": "5.0.2",
     "typescript": "^5.9.3",
     "vite": "^6.0.5",
     "wait-on": "^9.0.10"

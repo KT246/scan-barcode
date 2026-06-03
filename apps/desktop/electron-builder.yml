@@ -2,6 +2,7 @@ appId: com.kt246.phonescan
 productName: Phone Scan
 copyright: Copyright (c) 2026 KT246
 artifactName: Phone-Scan-Setup-${version}.${ext}
+afterPack: scripts/patch-win-icon.cjs
 
 directories:
   output: release
@@ -31,6 +32,9 @@ nsis:
   oneClick: false
   perMachine: false
   allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
   include: build/installer.nsh
   createDesktopShortcut: true
   createStartMenuShortcut: true

@@ -263,7 +263,6 @@ function App() {
           ) : (
             <LanguageSelectionScreen
               copy={copy}
-              selectedLanguage={settings.language}
               onSelectLanguage={selectLanguage}
             />
           )}
@@ -288,11 +287,9 @@ function LanguageLoadingScreen() {
 
 function LanguageSelectionScreen({
   copy,
-  selectedLanguage,
   onSelectLanguage,
 }: {
   copy: DesktopCopy
-  selectedLanguage: DesktopLanguage
   onSelectLanguage: (language: DesktopLanguage) => void
 }) {
   return (
@@ -306,25 +303,21 @@ function LanguageSelectionScreen({
         <p>{copy.language.description}</p>
 
         <div className="language-options">
-          {languageOptions.map((option) => {
-            const selected = option.code === selectedLanguage
-
-            return (
-              <button
-                className={`language-option language-option-${option.code} ${selected ? 'selected' : ''}`}
-                key={option.code}
-                lang={option.code === 'lo' ? 'lo-LA' : 'en'}
-                type="button"
-                onClick={() => onSelectLanguage(option.code)}
-              >
-                <span>
-                  <strong>{option.nativeLabel}</strong>
-                  <small>{option.description}</small>
-                </span>
-                <em>{selected ? copy.language.selected : copy.language.continue}</em>
-              </button>
-            )
-          })}
+          {languageOptions.map((option) => (
+            <button
+              className={`language-option language-option-${option.code}`}
+              key={option.code}
+              lang={option.code === 'lo' ? 'lo-LA' : 'en'}
+              type="button"
+              onClick={() => onSelectLanguage(option.code)}
+            >
+              <span>
+                <strong>{option.nativeLabel}</strong>
+                <small>{option.description}</small>
+              </span>
+              <em>{copy.language.continue}</em>
+            </button>
+          ))}
         </div>
       </div>
     </section>

@@ -14,6 +14,8 @@ import type {
 import { typeIntoFocusedWindow } from './keyboard'
 import { startScannerServer, type ScannerServerHandle } from './scanner-server'
 
+app.setName('Phone Scan')
+
 const desktopRoot = path.resolve(__dirname, '../..')
 const repoRoot = path.resolve(desktopRoot, '../..')
 const bootLogPath = path.join(os.tmpdir(), 'phone-scan-main.log')
