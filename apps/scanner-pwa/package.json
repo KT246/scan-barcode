@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "@fontsource/noto-sans-lao": "5.2.8",
     "@web-barcode/shared": "workspace:*",
     "@zxing/browser": "^0.1.5",
     "lucide-react": "^0.468.0",

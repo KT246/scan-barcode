@@ -84,6 +84,9 @@ importers:
 
   apps/scanner-pwa:
     dependencies:
+      '@fontsource/noto-sans-lao':
+        specifier: 5.2.8
+        version: 5.2.8
       '@web-barcode/shared':
         specifier: workspace:*
         version: link:../../packages/shared

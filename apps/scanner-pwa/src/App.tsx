@@ -4,6 +4,7 @@ import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
   Info,
+  Languages,
   Link2,
   Monitor,
   Send,
@@ -14,6 +15,7 @@ import {
 } from 'lucide-react'
 
 type MobilePage = 'connect' | 'scanner' | 'settings'
+type AppLanguage = 'en' | 'lo'
 
 type DesktopConnection = {
   connected: boolean
@@ -59,6 +61,7 @@ type ScannerSettings = {
   scanIntervalMs: number
 }
 
+const appLanguageStorageKey = 'phone-scan.language'
 const scannerSettingsStorageKey = 'phone-scan.scanner-settings'
 const defaultScannerSettings: ScannerSettings = {
   autoSend: true,
@@ -86,6 +89,190 @@ const barcodeVideoConstraints: MediaStreamConstraints = {
     },
   },
 }
+
+const pwaText = {
+  en: {
+    appName: 'Phone Scan',
+    languageLabel: 'Language',
+    english: 'English',
+    lao: 'ລາວ',
+    scannerTab: 'Scanner',
+    connectTab: 'Connect',
+    settingsTab: 'Settings',
+    connected: 'Connected',
+    notConnected: 'Not Connected',
+    offline: 'Offline',
+    waitingForDesktop: 'Waiting for desktop',
+    connectedTo: 'Connected to:',
+    noDesktopQrScanned: 'No desktop QR scanned',
+    missingDesktopToken: 'Missing desktop token.',
+    scanQrOrIp: 'Scan QR code or enter IP to connect',
+    connectionStatus: 'Connection Status',
+    desktopQrScanner: 'Desktop QR Scanner',
+    scanDesktopQrHere: 'Scan desktop QR here',
+    desktopQrHint: 'This scanner only connects the phone to Phone Scan Desktop.',
+    scanQrShown: 'Scan the QR code shown in the desktop app.',
+    stopQrScanner: 'Stop QR Scanner',
+    scanDesktopQr: 'Scan Desktop QR',
+    beforeScanning: 'Before scanning',
+    stepWifi: 'Keep phone and desktop on the same Wi-Fi or USB tethering.',
+    stepScanQr: 'Scan the QR from Phone Scan Desktop on this Connect page.',
+    stepUseScanner: 'After connected, use Scanner for product barcodes only.',
+    openBarcodeScanner: 'Open Barcode Scanner',
+    desktopReady: 'Desktop is connected. You can open the barcode scanner.',
+    connectionQrScannerStopped: 'Connection QR scanner stopped.',
+    cameraNeedsHttpsConnect: 'Camera needs HTTPS. Open this page from HTTPS before scanning the desktop QR.',
+    scanningDesktopConnectionQr: 'Scanning desktop connection QR...',
+    invalidDesktopQr: 'This is not a Phone Scan desktop QR. Use the QR shown in the desktop app.',
+    desktopQrDetected: 'Desktop QR detected. Opening local scanner...',
+    cameraUnavailable: 'Camera unavailable.',
+    cameraNeedsTrustedHttps: 'Camera needs trusted HTTPS',
+    installCertificate: 'Install the Phone Scan local certificate on this phone, then reopen the scanner.',
+    setup: 'Setup',
+    trustedHttpsMessage: 'Camera needs trusted HTTPS. Install the Phone Scan certificate, then reopen this page.',
+    alignBarcode: 'Align the barcode within the frame.',
+    scanningBarcodeOnly: 'Scanning barcode only...',
+    qrIgnored: 'QR ignored. Use the Connect tab to scan desktop QR.',
+    duplicateBarcodeIgnored: 'Duplicate barcode ignored.',
+    autoSendOff: 'Barcode scanned. Auto send is off.',
+    barcodeScannedNoDesktop: 'Barcode scanned, but desktop is not connected.',
+    barcodeSending: 'Barcode scanned. Sending to desktop...',
+    desktopTypedBarcode: 'Desktop received and typed the barcode.',
+    desktopReceivedTypingFailed: 'Desktop received it, but typing failed. Check focused input.',
+    couldNotSendBarcode: 'Could not send barcode. Check connection, firewall, or QR IP.',
+    startingScanner: 'Starting barcode scanner',
+    scannerAutoStarts: 'Scanner starts automatically on this tab.',
+    lastScanned: 'Last scanned',
+    noBarcodeYet: 'No barcode yet',
+    today: 'Today',
+    waitingForScan: 'Waiting for scan',
+    sendAgain: 'Send Again',
+    status: 'Status',
+    noBarcodeSent: 'No barcode sent yet.',
+    noBarcodeValue: 'No barcode value to send.',
+    openConnectScanAgain: 'Open Connect and scan the desktop QR again.',
+    sendingBarcode: 'Sending barcode to desktop...',
+    desktopReceivedTypingFailedShort: 'Desktop received the barcode, but typing failed.',
+    couldNotSendDesktop: 'Could not send barcode to desktop.',
+    networkFailed: 'Network request failed.',
+    scannerSettings: 'Scanner Settings',
+    barcodeOnlyBehavior: 'Barcode-only camera behavior',
+    scanInterval: 'Scan interval',
+    scanIntervalHint: 'Minimum delay before accepting the next read.',
+    ignoreDuplicates: 'Ignore duplicates',
+    ignoreDuplicatesHint: 'Block the same barcode while it stays in frame.',
+    autoSend: 'Auto send',
+    autoSendHint: 'Send each barcode to desktop after reading.',
+    debugStatus: 'Debug Status',
+    server: 'Server',
+    token: 'Token',
+    exists: 'Exists',
+    missing: 'Missing',
+    socket: 'Socket',
+    lastScan: 'Last Scan',
+    none: 'None',
+    lastSend: 'Last Send',
+    typedResult: 'Typed Result',
+    typed: 'Typed',
+    receivedOnly: 'Received only',
+    sending: 'Sending',
+    notTyped: 'Not typed',
+    error: 'Error',
+    channel: 'Channel',
+  },
+  lo: {
+    appName: 'Phone Scan',
+    languageLabel: 'ພາສາ',
+    english: 'English',
+    lao: 'ລາວ',
+    scannerTab: 'ສະແກນ',
+    connectTab: 'ເຊື່ອມຕໍ່',
+    settingsTab: 'ຕັ້ງຄ່າ',
+    connected: 'ເຊື່ອມຕໍ່ແລ້ວ',
+    notConnected: 'ຍັງບໍ່ເຊື່ອມຕໍ່',
+    offline: 'ອອບໄລນ໌',
+    waitingForDesktop: 'ລໍຖ້າເຄື່ອງຄອມ',
+    connectedTo: 'ເຊື່ອມຕໍ່ກັບ:',
+    noDesktopQrScanned: 'ຍັງບໍ່ໄດ້ສະແກນ QR ຈາກຄອມ',
+    missingDesktopToken: 'ບໍ່ພົບ token ຈາກເຄື່ອງຄອມ.',
+    scanQrOrIp: 'ສະແກນ QR ຫຼື ປ້ອນ IP ເພື່ອເຊື່ອມຕໍ່',
+    connectionStatus: 'ສະຖານະການເຊື່ອມຕໍ່',
+    desktopQrScanner: 'ສະແກນ QR ຈາກຄອມ',
+    scanDesktopQrHere: 'ສະແກນ QR ຈາກຄອມທີ່ນີ້',
+    desktopQrHint: 'ສະແກນນີ້ໃຊ້ເພື່ອເຊື່ອມກັບ Phone Scan Desktop ເທົ່ານັ້ນ.',
+    scanQrShown: 'ສະແກນ QR ທີ່ສະແດງໃນແອັບ desktop.',
+    stopQrScanner: 'ຢຸດສະແກນ QR',
+    scanDesktopQr: 'ສະແກນ QR ຈາກຄອມ',
+    beforeScanning: 'ກ່ອນສະແກນ',
+    stepWifi: 'ໃຫ້ໂທລະສັບ ແລະ ຄອມຢູ່ Wi-Fi ດຽວກັນ ຫຼື USB tethering.',
+    stepScanQr: 'ສະແກນ QR ຈາກ Phone Scan Desktop ໃນໜ້າ Connect.',
+    stepUseScanner: 'ຫຼັງຈາກເຊື່ອມແລ້ວ ໃຊ້ Scanner ສຳລັບ barcode ສິນຄ້າເທົ່ານັ້ນ.',
+    openBarcodeScanner: 'ເປີດສະແກນ Barcode',
+    desktopReady: 'ເຄື່ອງຄອມເຊື່ອມຕໍ່ແລ້ວ. ສາມາດເປີດສະແກນ barcode ໄດ້.',
+    connectionQrScannerStopped: 'ຢຸດສະແກນ QR ເຊື່ອມຕໍ່ແລ້ວ.',
+    cameraNeedsHttpsConnect: 'ກ້ອງຕ້ອງໃຊ້ HTTPS. ເປີດໜ້ານີ້ຜ່ານ HTTPS ກ່ອນສະແກນ QR ຈາກຄອມ.',
+    scanningDesktopConnectionQr: 'ກຳລັງສະແກນ QR ເຊື່ອມຕໍ່ຈາກຄອມ...',
+    invalidDesktopQr: 'ນີ້ບໍ່ແມ່ນ QR ຂອງ Phone Scan Desktop. ໃຊ້ QR ທີ່ສະແດງໃນ desktop app.',
+    desktopQrDetected: 'ພົບ QR ຈາກຄອມ. ກຳລັງເປີດສະແກນ local...',
+    cameraUnavailable: 'ເປີດກ້ອງບໍ່ໄດ້.',
+    cameraNeedsTrustedHttps: 'ກ້ອງຕ້ອງການ HTTPS ທີ່ໄວ້ໃຈໄດ້',
+    installCertificate: 'ຕິດຕັ້ງ certificate ຂອງ Phone Scan ໃນໂທລະສັບນີ້ ແລ້ວເປີດ scanner ອີກຄັ້ງ.',
+    setup: 'ຕັ້ງຄ່າ',
+    trustedHttpsMessage: 'ກ້ອງຕ້ອງການ HTTPS ທີ່ໄວ້ໃຈໄດ້. ຕິດຕັ້ງ certificate ແລ້ວເປີດໜ້ານີ້ອີກຄັ້ງ.',
+    alignBarcode: 'ວາງ barcode ໃຫ້ຢູ່ໃນກອບ.',
+    scanningBarcodeOnly: 'ກຳລັງສະແກນ barcode ເທົ່ານັ້ນ...',
+    qrIgnored: 'ຂ້າມ QR. ໃຊ້ໜ້າ Connect ເພື່ອສະແກນ QR ຈາກຄອມ.',
+    duplicateBarcodeIgnored: 'ຂ້າມ barcode ທີ່ຊ້ຳ.',
+    autoSendOff: 'ສະແກນ barcode ແລ້ວ. Auto send ປິດຢູ່.',
+    barcodeScannedNoDesktop: 'ສະແກນ barcode ແລ້ວ ແຕ່ desktop ຍັງບໍ່ເຊື່ອມ.',
+    barcodeSending: 'ສະແກນ barcode ແລ້ວ. ກຳລັງສົ່ງໄປ desktop...',
+    desktopTypedBarcode: 'Desktop ຮັບແລະພິມ barcode ແລ້ວ.',
+    desktopReceivedTypingFailed: 'Desktop ຮັບແລ້ວ ແຕ່ພິມບໍ່ສຳເລັດ. ກວດ input ທີ່ focus.',
+    couldNotSendBarcode: 'ສົ່ງ barcode ບໍ່ໄດ້. ກວດ connection, firewall ຫຼື QR IP.',
+    startingScanner: 'ກຳລັງເລີ່ມສະແກນ barcode',
+    scannerAutoStarts: 'Scanner ຈະເລີ່ມເອງໃນແທັບນີ້.',
+    lastScanned: 'ສະແກນຫຼ້າສຸດ',
+    noBarcodeYet: 'ຍັງບໍ່ມີ barcode',
+    today: 'ມື້ນີ້',
+    waitingForScan: 'ລໍຖ້າສະແກນ',
+    sendAgain: 'ສົ່ງອີກຄັ້ງ',
+    status: 'ສະຖານະ',
+    noBarcodeSent: 'ຍັງບໍ່ໄດ້ສົ່ງ barcode.',
+    noBarcodeValue: 'ບໍ່ມີຄ່າ barcode ເພື່ອສົ່ງ.',
+    openConnectScanAgain: 'ເປີດ Connect ແລະສະແກນ QR ຈາກ desktop ອີກຄັ້ງ.',
+    sendingBarcode: 'ກຳລັງສົ່ງ barcode ໄປ desktop...',
+    desktopReceivedTypingFailedShort: 'Desktop ຮັບ barcode ແລ້ວ ແຕ່ພິມບໍ່ສຳເລັດ.',
+    couldNotSendDesktop: 'ສົ່ງ barcode ໄປ desktop ບໍ່ໄດ້.',
+    networkFailed: 'Network request failed.',
+    scannerSettings: 'ຕັ້ງຄ່າສະແກນ',
+    barcodeOnlyBehavior: 'ພຶດຕິກຳກ້ອງສຳລັບ barcode ເທົ່ານັ້ນ',
+    scanInterval: 'ໄລຍະຫ່າງການສະແກນ',
+    scanIntervalHint: 'ເວລາຂັ້ນຕ່ຳກ່ອນຮັບການອ່ານຄັ້ງຕໍ່ໄປ.',
+    ignoreDuplicates: 'ຂ້າມຄ່າຊ້ຳ',
+    ignoreDuplicatesHint: 'ບລັອກ barcode ເດີມຂະນະທີ່ຍັງຢູ່ໃນກອບ.',
+    autoSend: 'ສົ່ງອັດຕະໂນມັດ',
+    autoSendHint: 'ສົ່ງ barcode ແຕ່ລະອັນໄປ desktop ຫຼັງຈາກອ່ານ.',
+    debugStatus: 'ສະຖານະ Debug',
+    server: 'Server',
+    token: 'Token',
+    exists: 'ມີແລ້ວ',
+    missing: 'ບໍ່ມີ',
+    socket: 'Socket',
+    lastScan: 'ສະແກນຫຼ້າສຸດ',
+    none: 'ບໍ່ມີ',
+    lastSend: 'ສົ່ງຫຼ້າສຸດ',
+    typedResult: 'ຜົນການພິມ',
+    typed: 'ພິມແລ້ວ',
+    receivedOnly: 'ຮັບເທົ່ານັ້ນ',
+    sending: 'ກຳລັງສົ່ງ',
+    notTyped: 'ຍັງບໍ່ພິມ',
+    error: 'ຂໍ້ຜິດພາດ',
+    channel: 'ຊ່ອງທາງ',
+  },
+} as const
+
+type PwaTextKey = keyof typeof pwaText.en
+type Translate = (key: PwaTextKey) => string
 
 let scanAudioContext: AudioContext | null = null
 
@@ -174,6 +361,14 @@ function getInitialScannerSettings() {
   }
 }
 
+function getInitialAppLanguage(): AppLanguage {
+  try {
+    return window.localStorage.getItem(appLanguageStorageKey) === 'lo' ? 'lo' : 'en'
+  } catch {
+    return 'en'
+  }
+}
+
 function formatScanTime(timestamp: number) {
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
@@ -218,19 +413,29 @@ function App() {
 }
 
 function ScannerApp() {
+  const [language, setLanguage] = useState<AppLanguage>(() => getInitialAppLanguage())
+  const t: Translate = (key) => pwaText[language][key]
   const [connection, setConnection] = useState<DesktopConnection>(() => getInitialConnection())
   const [page, setPage] = useState<MobilePage>(() => (connection.token ? 'scanner' : 'connect'))
   const [scannerSettings, setScannerSettings] = useState<ScannerSettings>(() => getInitialScannerSettings())
   const [lastScan, setLastScan] = useState<LastScan | null>(null)
   const [lastSend, setLastSend] = useState<LastSend>({
     state: 'idle',
-    message: 'No barcode sent yet.',
+    message: t('noBarcodeSent'),
   })
   const socketRef = useRef<Socket | null>(null)
 
   const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
     setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
   }
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(appLanguageStorageKey, language)
+    } catch {
+      // Storage can be unavailable in private browsing; runtime language still works.
+    }
+  }, [language])
 
   useEffect(() => {
     try {
@@ -322,16 +527,16 @@ function ScannerApp() {
     if (!barcode || !connection.token) {
       updateSendStatus({
         state: 'failed',
-        message: !barcode ? 'No barcode value to send.' : 'Missing desktop token.',
+        message: !barcode ? t('noBarcodeValue') : t('missingDesktopToken'),
       })
-      return { delivered: false, typed: false, error: !barcode ? 'No barcode value to send.' : 'Missing desktop token.' }
+      return { delivered: false, typed: false, error: !barcode ? t('noBarcodeValue') : t('missingDesktopToken') }
     }
 
     if (!connection.connected) {
       updateSendStatus({
         state: 'failed',
-        message: 'Barcode scanned, but desktop is not connected.',
-        detail: 'Open Connect and scan the desktop QR again.',
+        message: t('barcodeScannedNoDesktop'),
+        detail: t('openConnectScanAgain'),
       })
       return { delivered: false, typed: false, error: 'Desktop is not connected.' }
     }
@@ -345,7 +550,7 @@ function ScannerApp() {
 
     updateSendStatus({
       state: 'sending',
-      message: 'Sending barcode to desktop...',
+      message: t('sendingBarcode'),
     })
 
     const socketResult = await new Promise<SendResult | null>((resolve) => {
@@ -396,7 +601,7 @@ function ScannerApp() {
         result = {
           delivered: false,
           typed: false,
-          error: error instanceof Error ? error.message : 'Network request failed.',
+          error: error instanceof Error ? error.message : t('networkFailed'),
         }
       }
     }
@@ -405,9 +610,9 @@ function ScannerApp() {
       state: result.delivered ? (result.typed ? 'typed' : 'received') : 'failed',
       message: result.delivered
         ? result.typed
-          ? 'Desktop received and typed the barcode.'
-          : 'Desktop received the barcode, but typing failed.'
-        : 'Could not send barcode to desktop.',
+          ? t('desktopTypedBarcode')
+          : t('desktopReceivedTypingFailedShort')
+        : t('couldNotSendDesktop'),
       detail: result.error,
       via: result.via,
       time: formatScanTime(timestamp),
@@ -417,30 +622,72 @@ function ScannerApp() {
   }
 
   return (
-    <main className="pwa-app" aria-label="Phone Scan PWA">
+    <main className={`pwa-app language-${language}`} lang={language === 'lo' ? 'lo' : 'en'} aria-label="Phone Scan PWA">
       <section className="app-screen">
+        <AppNavbar language={language} setLanguage={setLanguage} t={t} />
+
         {page === 'scanner' ? (
           <ScannerScreen
             connection={connection}
             lastScan={lastScan}
-            lastSend={lastSend}
             recordLocalScan={recordLocalScan}
             sendBarcode={sendBarcode}
             scannerSettings={scannerSettings}
+            t={t}
           />
         ) : page === 'settings' ? (
           <SettingsScreen
             connection={connection}
             scannerSettings={scannerSettings}
             updateScannerSettings={updateScannerSettings}
+            t={t}
           />
         ) : (
-          <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} />
+          <ConnectScreen connection={connection} lastScan={lastScan} lastSend={lastSend} setPage={setPage} t={t} />
         )}
 
-        <MobileTabs page={page} setPage={setPage} />
+        <MobileTabs page={page} setPage={setPage} t={t} />
       </section>
     </main>
+  )
+}
+
+function AppNavbar({
+  language,
+  setLanguage,
+  t,
+}: {
+  language: AppLanguage
+  setLanguage: (language: AppLanguage) => void
+  t: Translate
+}) {
+  return (
+    <header className="app-navbar">
+      <div className="app-navbar-brand">
+        <img src="/app-logo-icon.png" alt="Phone Scan logo" />
+        <span>{t('appName')}</span>
+      </div>
+
+      <div className="language-switcher" aria-label={t('languageLabel')}>
+        <Languages size={18} strokeWidth={2.3} />
+        <button
+          type="button"
+          className={language === 'en' ? 'active' : ''}
+          aria-pressed={language === 'en'}
+          onClick={() => setLanguage('en')}
+        >
+          EN
+        </button>
+        <button
+          type="button"
+          className={language === 'lo' ? 'active language-option-lo' : 'language-option-lo'}
+          aria-pressed={language === 'lo'}
+          onClick={() => setLanguage('lo')}
+        >
+          ລາວ
+        </button>
+      </div>
+    </header>
   )
 }
 
@@ -449,19 +696,26 @@ function ConnectScreen({
   lastScan,
   lastSend,
   setPage,
+  t,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
   lastSend: LastSend
   setPage: (page: MobilePage) => void
+  t: Translate
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
   const [connectScannerActive, setConnectScannerActive] = useState(false)
   const [connectScanMessage, setConnectScanMessage] = useState(
-    connection.connected ? 'Desktop is connected. You can open the barcode scanner.' : 'Scan the QR code shown in the desktop app.',
+    connection.connected ? t('desktopReady') : t('scanQrShown'),
   )
   const cameraNeedsTrustedHttps = !window.isSecureContext
+  const connectionMessage = connection.connected
+    ? `${connection.computerName} - ${connection.ipAddress}:${connection.port}`
+    : connection.error === 'Missing desktop token.'
+      ? t('scanQrOrIp')
+      : connection.error ?? t('scanQrOrIp')
 
   useEffect(() => {
     return () => {
@@ -479,19 +733,19 @@ function ConnectScreen({
   const toggleConnectScanner = async () => {
     if (connectScannerActive) {
       stopConnectScanner()
-      setConnectScanMessage('Connection QR scanner stopped.')
+      setConnectScanMessage(t('connectionQrScannerStopped'))
       return
     }
 
     if (cameraNeedsTrustedHttps) {
-      setConnectScanMessage('Camera needs HTTPS. Open this page from HTTPS before scanning the desktop QR.')
+      setConnectScanMessage(t('cameraNeedsHttpsConnect'))
       return
     }
 
     try {
       const reader = new BrowserMultiFormatReader()
       setConnectScannerActive(true)
-      setConnectScanMessage('Scanning desktop connection QR...')
+      setConnectScanMessage(t('scanningDesktopConnectionQr'))
       controlsRef.current = await reader.decodeFromConstraints(
         {
           video: {
@@ -510,36 +764,22 @@ function ConnectScreen({
           stopConnectScanner()
 
           if (!scannerUrl) {
-            setConnectScanMessage('This is not a Phone Scan desktop QR. Use the QR shown in the desktop app.')
+            setConnectScanMessage(t('invalidDesktopQr'))
             return
           }
 
-          setConnectScanMessage('Desktop QR detected. Opening local scanner...')
+          setConnectScanMessage(t('desktopQrDetected'))
           window.location.assign(scannerUrl.href)
         },
       )
     } catch (error) {
       setConnectScannerActive(false)
-      setConnectScanMessage(error instanceof Error ? error.message : 'Camera unavailable.')
+      setConnectScanMessage(error instanceof Error ? error.message : t('cameraUnavailable'))
     }
   }
 
   return (
     <div className="pwa-content">
-      <header className="connect-header">
-        <div className="pwa-brand">
-          <img src="/app-logo-icon.png" alt="Phone Scan logo" />
-          <span>Phone Scan</span>
-        </div>
-        <div className="title-row">
-          <Link2 size={40} strokeWidth={3} />
-          <div>
-            <h1>Connect to Desktop</h1>
-            <p>{connection.connected ? `${connection.computerName} is ready` : connection.error ?? 'Scan the desktop QR code to connect'}</p>
-          </div>
-        </div>
-      </header>
-
       <section className="connect-card status-card-mobile compact-connect-card">
         <div className="mobile-card-title">
           <span className="bars">
@@ -548,19 +788,15 @@ function ConnectScreen({
             <i />
             <i />
           </span>
-          <h2>Connection Status</h2>
+          <h2>{t('connectionStatus')}</h2>
         </div>
 
         <div className="not-connected-box">
           <div className="status-copy">
             <span className={`green-dot ${connection.connected ? 'online' : 'offline'}`} />
             <div>
-              <strong>{connection.connected ? 'Connected' : 'Not Connected'}</strong>
-              <p>
-                {connection.connected
-                  ? `${connection.computerName} - ${connection.ipAddress}:${connection.port}`
-                  : connection.error ?? 'Scan QR code or enter IP to connect'}
-              </p>
+              <strong>{connection.connected ? t('connected') : t('notConnected')}</strong>
+              <p>{connectionMessage}</p>
             </div>
           </div>
           <div className="device-link-art" aria-hidden="true">
@@ -576,7 +812,7 @@ function ConnectScreen({
       <section className="connect-card connect-qr-scanner-card">
         <div className="mobile-card-title">
           <span className="info-dot">QR</span>
-          <h2>Desktop QR Scanner</h2>
+          <h2>{t('desktopQrScanner')}</h2>
         </div>
 
         <div className={`connect-qr-preview ${connectScannerActive ? 'has-video' : ''}`}>
@@ -584,8 +820,8 @@ function ConnectScreen({
           {!connectScannerActive && (
             <div className="connect-qr-placeholder">
               <Link2 size={42} strokeWidth={2.5} />
-              <strong>Scan desktop QR here</strong>
-              <span>This scanner only connects the phone to Phone Scan Desktop.</span>
+              <strong>{t('scanDesktopQrHere')}</strong>
+              <span>{t('desktopQrHint')}</span>
             </div>
           )}
         </div>
@@ -594,31 +830,31 @@ function ConnectScreen({
 
         <button className="scan-button connect-open-scanner" type="button" onClick={toggleConnectScanner}>
           <ScanLine size={30} strokeWidth={2.5} />
-          <span>{connectScannerActive ? 'Stop QR Scanner' : 'Scan Desktop QR'}</span>
+          <span>{connectScannerActive ? t('stopQrScanner') : t('scanDesktopQr')}</span>
         </button>
       </section>
 
       <section className="connect-card how-card compact-how-card">
         <div className="mobile-card-title">
           <span className="info-dot">i</span>
-          <h2>Before scanning</h2>
+          <h2>{t('beforeScanning')}</h2>
         </div>
 
         <div className="how-body">
           <ol>
-            <li><span>1</span><p>Keep phone and desktop on the same Wi-Fi or USB tethering.</p></li>
-            <li><span>2</span><p>Scan the QR from Phone Scan Desktop on this Connect page.</p></li>
-            <li><span>3</span><p>After connected, use Scanner for product barcodes only.</p></li>
+            <li><span>1</span><p>{t('stepWifi')}</p></li>
+            <li><span>2</span><p>{t('stepScanQr')}</p></li>
+            <li><span>3</span><p>{t('stepUseScanner')}</p></li>
           </ol>
         </div>
 
         <button className="scan-button connect-open-scanner" type="button" onClick={() => setPage('scanner')}>
           <Barcode size={30} strokeWidth={2.5} />
-          <span>Open Barcode Scanner</span>
+          <span>{t('openBarcodeScanner')}</span>
         </button>
       </section>
 
-      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} />
+      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} t={t} />
     </div>
   )
 }
@@ -626,17 +862,17 @@ function ConnectScreen({
 function ScannerScreen({
   connection,
   lastScan,
-  lastSend,
   recordLocalScan,
   sendBarcode,
   scannerSettings,
+  t,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
-  lastSend: LastSend
   recordLocalScan: (value: string, type: LastScan['type'], timestamp?: number) => LastScan | null
   sendBarcode: SendBarcode
   scannerSettings: ScannerSettings
+  t: Translate
 }) {
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const controlsRef = useRef<IScannerControls | null>(null)
@@ -647,7 +883,7 @@ function ScannerScreen({
   const sendBarcodeRef = useRef(sendBarcode)
   const settingsRef = useRef(scannerSettings)
   const [scannerActive, setScannerActive] = useState(false)
-  const [scanMessage, setScanMessage] = useState('Align the barcode within the frame.')
+  const [scanMessage, setScanMessage] = useState(t('alignBarcode'))
   const cameraNeedsTrustedHttps = !window.isSecureContext
 
   useEffect(() => {
@@ -673,7 +909,7 @@ function ScannerScreen({
     }
 
     if (cameraNeedsTrustedHttps) {
-      setScanMessage('Camera needs trusted HTTPS. Install the Phone Scan certificate, then reopen this page.')
+      setScanMessage(t('trustedHttpsMessage'))
       return
     }
 
@@ -681,7 +917,7 @@ function ScannerScreen({
       const reader = new BrowserMultiFormatOneDReader(undefined, barcodeReaderOptions)
       scanInFlightRef.current = false
       setScannerActive(true)
-      setScanMessage('Scanning barcode only...')
+      setScanMessage(t('scanningBarcodeOnly'))
       const controls = await reader.decodeFromConstraints(
         barcodeVideoConstraints,
         videoRef.current ?? undefined,
@@ -699,7 +935,7 @@ function ScannerScreen({
           const scannerUrl = getDesktopScannerUrl(value)
 
           if (scannerUrl) {
-            setScanMessage('QR ignored. Use the Connect tab to scan desktop QR.')
+            setScanMessage(t('qrIgnored'))
             return
           }
 
@@ -715,7 +951,7 @@ function ScannerScreen({
           ) {
             setScanMessage(
               lastAcceptedScan.value === value
-                ? 'Duplicate barcode ignored.'
+                ? t('duplicateBarcodeIgnored')
                 : `Waiting ${Math.ceil((activeSettings.scanIntervalMs - elapsedSinceLastScan) / 1000)}s before next scan.`,
             )
             return
@@ -729,24 +965,24 @@ function ScannerScreen({
             playBarcodeScanFeedback()
 
             if (!activeSettings.autoSend) {
-              setScanMessage('Barcode scanned. Auto send is off.')
+              setScanMessage(t('autoSendOff'))
               return
             }
 
             if (!connectionRef.current.connected) {
-              setScanMessage('Barcode scanned, but desktop is not connected.')
+              setScanMessage(t('barcodeScannedNoDesktop'))
               await sendBarcodeRef.current(value, 'barcode', timestamp)
               return
             }
 
-            setScanMessage('Barcode scanned. Sending to desktop...')
+            setScanMessage(t('barcodeSending'))
             const sendResult = await sendBarcodeRef.current(value, 'barcode', timestamp)
             setScanMessage(
               sendResult.delivered
                 ? sendResult.typed
-                  ? 'Desktop received and typed the barcode.'
-                  : 'Desktop received it, but typing failed. Check focused input.'
-                : 'Could not send barcode. Check connection, firewall, or QR IP.',
+                  ? t('desktopTypedBarcode')
+                  : t('desktopReceivedTypingFailed')
+                : t('couldNotSendBarcode'),
             )
           } finally {
             scanInFlightRef.current = false
@@ -759,7 +995,7 @@ function ScannerScreen({
       controlsRef.current?.stop()
       controlsRef.current = null
       setScannerActive(false)
-      setScanMessage(error instanceof Error ? error.message : 'Camera unavailable.')
+      setScanMessage(error instanceof Error ? error.message : t('cameraUnavailable'))
     }
   }
 
@@ -773,29 +1009,17 @@ function ScannerScreen({
 
   return (
     <div className="scanner-content">
-      <header className="scanner-header">
-        <span className="hamburger scanner-header-icon" aria-hidden="true">
-          <ScanLine size={39} strokeWidth={2.5} />
-        </span>
-        <h1>Camera Scanner</h1>
-        <button className="connected-pill" type="button">
-          <span className={connection.connected ? 'online' : 'offline'} />
-          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
-          <i>v</i>
-        </button>
-      </header>
+      <DesktopStatusPill connection={connection} t={t} />
 
-      <DesktopStatusPill connection={connection} />
-
-      {cameraNeedsTrustedHttps && <CertificateNotice connection={connection} />}
+      {cameraNeedsTrustedHttps && <CertificateNotice connection={connection} t={t} />}
 
       <section className={`camera-preview ${scannerActive ? 'has-video' : ''}`}>
         <video ref={videoRef} className="camera-video" muted playsInline />
         {!scannerActive && (
           <div className="camera-placeholder">
             <ScanLine size={64} strokeWidth={2.2} />
-            <strong>Starting barcode scanner</strong>
-            <span>Scanner starts automatically on this tab.</span>
+            <strong>{t('startingScanner')}</strong>
+            <span>{t('scannerAutoStarts')}</span>
           </div>
         )}
         <span className="corner tl" />
@@ -811,27 +1035,26 @@ function ScannerScreen({
             <Barcode size={46} strokeWidth={2.4} />
           </span>
           <div>
-            <p>Last scanned</p>
-            <strong>{lastScan?.value ?? 'No barcode yet'}</strong>
-            <time>{lastScan ? `Today, ${lastScan.time}` : 'Waiting for scan'}</time>
+            <p>{t('lastScanned')}</p>
+            <strong>{lastScan?.value ?? t('noBarcodeYet')}</strong>
+            <time>{lastScan ? `${t('today')}, ${lastScan.time}` : t('waitingForScan')}</time>
           </div>
           <button type="button" disabled={!lastScan} onClick={() => lastScan && sendBarcode(lastScan.value, lastScan.type)}>
             <Send size={30} strokeWidth={2.3} />
-            <span>Send Again</span>
+            <span>{t('sendAgain')}</span>
           </button>
         </div>
         <div className="scan-tips compact-scan-tips">
           <div>
             <div className="tips-title">
               <span>◌</span>
-              <strong>Status</strong>
+              <strong>{t('status')}</strong>
             </div>
             <p>{scanMessage}</p>
           </div>
         </div>
       </section>
 
-      <ConnectionDiagnostics connection={connection} lastScan={lastScan} lastSend={lastSend} compact />
     </div>
   )
 }
@@ -840,39 +1063,29 @@ function SettingsScreen({
   connection,
   scannerSettings,
   updateScannerSettings,
+  t,
 }: {
   connection: DesktopConnection
   scannerSettings: ScannerSettings
   updateScannerSettings: (settings: Partial<ScannerSettings>) => void
+  t: Translate
 }) {
   return (
     <div className="scanner-content settings-content">
-      <header className="scanner-header">
-        <span className="hamburger scanner-settings-toggle active" aria-hidden="true">
-          <Settings size={39} strokeWidth={2.5} />
-        </span>
-        <h1>Settings</h1>
-        <button className="connected-pill" type="button">
-          <span className={connection.connected ? 'online' : 'offline'} />
-          <strong>{connection.connected ? 'Connected' : 'Offline'}</strong>
-          <i>⌄</i>
-        </button>
-      </header>
-
-      <DesktopStatusPill connection={connection} />
+      <DesktopStatusPill connection={connection} t={t} />
 
       <section className="scanner-settings-card settings-page-card">
         <div className="scanner-settings-header">
           <div>
-            <strong>Scanner Settings</strong>
-            <span>Barcode-only camera behavior</span>
+            <strong>{t('scannerSettings')}</strong>
+            <span>{t('barcodeOnlyBehavior')}</span>
           </div>
         </div>
 
         <label className="scanner-setting-row">
           <span>
-            <strong>Scan interval</strong>
-            <small>Minimum delay before accepting the next read.</small>
+            <strong>{t('scanInterval')}</strong>
+            <small>{t('scanIntervalHint')}</small>
           </span>
           <input
             min="0.2"
@@ -886,8 +1099,8 @@ function SettingsScreen({
 
         <label className="scanner-setting-row">
           <span>
-            <strong>Ignore duplicates</strong>
-            <small>Block the same barcode while it stays in frame.</small>
+            <strong>{t('ignoreDuplicates')}</strong>
+            <small>{t('ignoreDuplicatesHint')}</small>
           </span>
           <input
             type="checkbox"
@@ -898,8 +1111,8 @@ function SettingsScreen({
 
         <label className="scanner-setting-row">
           <span>
-            <strong>Auto send</strong>
-            <small>Send each barcode to desktop after reading.</small>
+            <strong>{t('autoSend')}</strong>
+            <small>{t('autoSendHint')}</small>
           </span>
           <input
             type="checkbox"
@@ -914,18 +1127,20 @@ function SettingsScreen({
 
 function DesktopStatusPill({
   connection,
+  t,
   className = '',
 }: {
   connection: DesktopConnection
+  t: Translate
   className?: string
 }) {
-  const endpoint = connection.token ? `${connection.ipAddress}:${connection.port}` : 'No desktop QR scanned'
+  const endpoint = connection.token ? `${connection.ipAddress}:${connection.port}` : t('noDesktopQrScanned')
 
   return (
     <section className={`desktop-status-pill ${className}`}>
       <Monitor size={31} strokeWidth={2} />
       <span>
-        Connected to: <strong>{connection.connected ? connection.computerName : 'Waiting for desktop'}</strong>
+        {t('connectedTo')} <strong>{connection.connected ? connection.computerName : t('waitingForDesktop')}</strong>
       </span>
       <em />
       <Wifi size={31} strokeWidth={2.4} />
@@ -939,15 +1154,15 @@ function DesktopStatusPill({
           <i>⌄</i>
 */
 
-function CertificateNotice({ connection }: { connection: DesktopConnection }) {
+function CertificateNotice({ connection, t }: { connection: DesktopConnection; t: Translate }) {
   return (
     <section className="certificate-notice">
       <Info size={28} strokeWidth={2.3} />
       <div>
-        <strong>Camera needs trusted HTTPS</strong>
-        <p>Install the Phone Scan local certificate on this phone, then reopen the scanner.</p>
+        <strong>{t('cameraNeedsTrustedHttps')}</strong>
+        <p>{t('installCertificate')}</p>
       </div>
-      <a href={connection.trustUrl || connection.certificateUrl}>Setup</a>
+      <a href={connection.trustUrl || connection.certificateUrl}>{t('setup')}</a>
     </section>
   )
 }
@@ -956,29 +1171,31 @@ function ConnectionDiagnostics({
   connection,
   lastScan,
   lastSend,
+  t,
   compact = false,
 }: {
   connection: DesktopConnection
   lastScan: LastScan | null
   lastSend: LastSend
+  t: Translate
   compact?: boolean
 }) {
   return (
     <section className={`diagnostics-card ${compact ? 'compact' : ''}`}>
       <div className="diagnostics-title">
         <span className={`diagnostics-dot ${connection.connected ? 'online' : 'offline'}`} />
-        <strong>Debug Status</strong>
+        <strong>{t('debugStatus')}</strong>
       </div>
 
       <div className="diagnostics-grid">
-        <DiagnosticRow label="Server" value={connection.serverUrl} />
-        <DiagnosticRow label="Token" value={connection.token ? 'Exists' : 'Missing'} tone={connection.token ? 'good' : 'bad'} />
-        <DiagnosticRow label="Socket" value={connection.connected ? 'Connected' : 'Offline'} tone={connection.connected ? 'good' : 'bad'} />
-        <DiagnosticRow label="Last Scan" value={lastScan ? `${lastScan.value} (${lastScan.type})` : 'None'} />
-        <DiagnosticRow label="Last Send" value={lastSend.message} tone={lastSend.state === 'typed' || lastSend.state === 'received' ? 'good' : lastSend.state === 'failed' ? 'bad' : 'neutral'} />
-        <DiagnosticRow label="Typed Result" value={lastSend.state === 'typed' ? 'Typed' : lastSend.state === 'received' ? 'Received only' : lastSend.state === 'sending' ? 'Sending' : 'Not typed'} tone={lastSend.state === 'typed' ? 'good' : lastSend.state === 'received' || lastSend.state === 'failed' ? 'bad' : 'neutral'} />
-        {lastSend.detail && <DiagnosticRow label="Error" value={lastSend.detail} tone="bad" />}
-        {lastSend.via && <DiagnosticRow label="Channel" value={lastSend.via.toUpperCase()} />}
+        <DiagnosticRow label={t('server')} value={connection.serverUrl} />
+        <DiagnosticRow label={t('token')} value={connection.token ? t('exists') : t('missing')} tone={connection.token ? 'good' : 'bad'} />
+        <DiagnosticRow label={t('socket')} value={connection.connected ? t('connected') : t('offline')} tone={connection.connected ? 'good' : 'bad'} />
+        <DiagnosticRow label={t('lastScan')} value={lastScan ? `${lastScan.value} (${lastScan.type})` : t('none')} />
+        <DiagnosticRow label={t('lastSend')} value={lastSend.message} tone={lastSend.state === 'typed' || lastSend.state === 'received' ? 'good' : lastSend.state === 'failed' ? 'bad' : 'neutral'} />
+        <DiagnosticRow label={t('typedResult')} value={lastSend.state === 'typed' ? t('typed') : lastSend.state === 'received' ? t('receivedOnly') : lastSend.state === 'sending' ? t('sending') : t('notTyped')} tone={lastSend.state === 'typed' ? 'good' : lastSend.state === 'received' || lastSend.state === 'failed' ? 'bad' : 'neutral'} />
+        {lastSend.detail && <DiagnosticRow label={t('error')} value={lastSend.detail} tone="bad" />}
+        {lastSend.via && <DiagnosticRow label={t('channel')} value={lastSend.via.toUpperCase()} />}
       </div>
     </section>
   )
@@ -1004,14 +1221,16 @@ function DiagnosticRow({
 function MobileTabs({
   page,
   setPage,
+  t,
 }: {
   page: MobilePage
   setPage: (page: MobilePage) => void
+  t: Translate
 }) {
   const tabs = [
-    { page: 'scanner' as const, label: 'Scanner', icon: <ScanLine size={34} strokeWidth={2.2} /> },
-    { page: 'connect' as const, label: 'Connect', icon: <Link2 size={35} strokeWidth={2.6} /> },
-    { page: 'settings' as const, label: 'Settings', icon: <Settings size={34} strokeWidth={2.3} /> },
+    { page: 'scanner' as const, label: t('scannerTab'), icon: <ScanLine size={34} strokeWidth={2.2} /> },
+    { page: 'connect' as const, label: t('connectTab'), icon: <Link2 size={35} strokeWidth={2.6} /> },
+    { page: 'settings' as const, label: t('settingsTab'), icon: <Settings size={34} strokeWidth={2.3} /> },
   ]
 
   return (
