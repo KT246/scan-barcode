@@ -15,8 +15,11 @@ files:
 extraResources:
   - from: ../scanner-pwa/dist
     to: scanner-pwa
+  - from: build/icon.png
+    to: icon.png
 
 win:
+  icon: icon.ico
   signAndEditExecutable: false
   target:
     - target: nsis

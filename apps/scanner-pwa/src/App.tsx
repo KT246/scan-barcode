@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { BrowserMultiFormatOneDReader, BrowserMultiFormatReader, type IScannerControls } from '@zxing/browser'
+import { BarcodeFormat, DecodeHintType } from '@zxing/library'
 import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
@@ -68,9 +69,29 @@ const defaultScannerSettings: ScannerSettings = {
   duplicateLock: true,
   scanIntervalMs: 1000,
 }
+const supportedBarcodeFormats = [
+  BarcodeFormat.CODABAR,
+  BarcodeFormat.CODE_39,
+  BarcodeFormat.CODE_93,
+  BarcodeFormat.CODE_128,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.ITF,
+  BarcodeFormat.RSS_14,
+  BarcodeFormat.RSS_EXPANDED,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+  BarcodeFormat.UPC_EAN_EXTENSION,
+]
+const barcodeReaderHints = new Map<DecodeHintType, unknown>([
+  [DecodeHintType.POSSIBLE_FORMATS, supportedBarcodeFormats],
+  [DecodeHintType.TRY_HARDER, true],
+  [DecodeHintType.ENABLE_CODE_39_EXTENDED_MODE, true],
+  [DecodeHintType.RETURN_CODABAR_START_END, true],
+])
 const barcodeReaderOptions = {
-  delayBetweenScanAttempts: 70,
-  delayBetweenScanSuccess: 350,
+  delayBetweenScanAttempts: 45,
+  delayBetweenScanSuccess: 260,
   tryPlayVideoTimeout: 3000,
 }
 const barcodeVideoConstraints: MediaStreamConstraints = {
@@ -79,15 +100,19 @@ const barcodeVideoConstraints: MediaStreamConstraints = {
       ideal: 'environment',
     },
     width: {
-      ideal: 1280,
+      ideal: 1920,
     },
     height: {
-      ideal: 720,
+      ideal: 1080,
     },
     frameRate: {
       ideal: 30,
     },
   },
+}
+
+function isSupportedBarcodeFormat(format: BarcodeFormat | null | undefined) {
+  return format == null || supportedBarcodeFormats.includes(format)
 }
 
 const pwaText = {
@@ -374,16 +399,84 @@ function playBarcodeScanFeedback() {
   }
 }
 
-function applyBarcodeCameraTuning(controls: IScannerControls) {
+type CameraModeCapabilities = MediaTrackCapabilities & {
+  exposureMode?: string[]
+  focusMode?: string[]
+  torch?: boolean
+  whiteBalanceMode?: string[]
+  zoom?: {
+    max?: number
+    min?: number
+    step?: number
+  }
+}
+
+type BarcodeCameraConstraints = MediaTrackConstraintSet & {
+  exposureMode?: string
+  focusMode?: string
+  torch?: boolean
+  whiteBalanceMode?: string
+  zoom?: number
+}
+
+function getVideoTrackFromElement(videoElement?: HTMLVideoElement | null) {
+  const stream = videoElement?.srcObject
+
+  return stream instanceof MediaStream ? stream.getVideoTracks()[0] : undefined
+}
+
+function buildBarcodeCameraConstraints(capabilities?: CameraModeCapabilities): MediaTrackConstraints {
+  const advanced: BarcodeCameraConstraints[] = []
+  const supportsMode = (key: 'exposureMode' | 'focusMode' | 'whiteBalanceMode', value: string) => capabilities?.[key]?.includes(value) === true
+
+  if (supportsMode('focusMode', 'continuous')) {
+    advanced.push({ focusMode: 'continuous' })
+  }
+
+  if (supportsMode('exposureMode', 'continuous')) {
+    advanced.push({ exposureMode: 'continuous' })
+  }
+
+  if (supportsMode('whiteBalanceMode', 'continuous')) {
+    advanced.push({ whiteBalanceMode: 'continuous' })
+  }
+
+  if (capabilities?.zoom && typeof capabilities.zoom.max === 'number' && capabilities.zoom.max > 1) {
+    const minZoom = typeof capabilities.zoom.min === 'number' ? capabilities.zoom.min : 1
+    const targetZoom = Math.min(capabilities.zoom.max, Math.max(minZoom, 1.25))
+
+    advanced.push({ zoom: targetZoom })
+  }
+
+  return advanced.length > 0 ? { advanced: advanced as MediaTrackConstraintSet[] } : {}
+}
+
+async function applyBarcodeCameraTuning(controls: IScannerControls, videoElement?: HTMLVideoElement | null) {
+  const track = getVideoTrackFromElement(videoElement)
+  const capabilities = (() => {
+    try {
+      return (track?.getCapabilities?.() ?? controls.streamVideoCapabilitiesGet?.((nextTrack) => [nextTrack])) as CameraModeCapabilities | undefined
+    } catch {
+      return undefined
+    }
+  })()
+  const constraints = buildBarcodeCameraConstraints(capabilities)
+
+  if (!constraints.advanced?.length) {
+    return
+  }
+
   try {
-    controls.streamVideoConstraintsApply?.({
-      advanced: [
-        { focusMode: 'continuous' } as unknown as MediaTrackConstraintSet,
-        { exposureMode: 'continuous' } as unknown as MediaTrackConstraintSet,
-      ],
-    })
+    await track?.applyConstraints(constraints)
+    return
   } catch {
-    // Browser support varies; scan should continue with the base constraints.
+    // Browser support varies; fall through to ZXing's controls helper.
+  }
+
+  try {
+    controls.streamVideoConstraintsApply?.(constraints)
+  } catch {
+    // Camera tuning is best-effort; scan should continue with the base constraints.
   }
 }
 
@@ -953,6 +1046,7 @@ function ScannerScreen({
   const recordLocalScanRef = useRef(recordLocalScan)
   const sendBarcodeRef = useRef(sendBarcode)
   const settingsRef = useRef(scannerSettings)
+  const focusTuneTimersRef = useRef<number[]>([])
   const [scannerActive, setScannerActive] = useState(false)
   const [scanMessage, setScanMessage] = useState(t('alignBarcode'))
   const cameraNeedsTrustedHttps = !window.isSecureContext
@@ -967,7 +1061,21 @@ function ScannerScreen({
     settingsRef.current = scannerSettings
   }, [scannerSettings])
 
+  const clearFocusTuneTimers = () => {
+    focusTuneTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+    focusTuneTimersRef.current = []
+  }
+
+  const scheduleFocusTuning = (controls: IScannerControls) => {
+    clearFocusTuneTimers()
+    void applyBarcodeCameraTuning(controls, videoRef.current)
+    focusTuneTimersRef.current = [350, 1200, 2400].map((delay) => window.setTimeout(() => {
+      void applyBarcodeCameraTuning(controls, videoRef.current)
+    }, delay))
+  }
+
   const stopScanner = () => {
+    clearFocusTuneTimers()
     controlsRef.current?.stop()
     controlsRef.current = null
     scanInFlightRef.current = false
@@ -985,7 +1093,7 @@ function ScannerScreen({
     }
 
     try {
-      const reader = new BrowserMultiFormatOneDReader(undefined, barcodeReaderOptions)
+      const reader = new BrowserMultiFormatOneDReader(barcodeReaderHints, barcodeReaderOptions)
       scanInFlightRef.current = false
       setScannerActive(true)
       setScanMessage(t('scanningBarcodeOnly'))
@@ -998,8 +1106,9 @@ function ScannerScreen({
           }
 
           const value = result.getText().trim()
+          const format = result.getBarcodeFormat()
 
-          if (!value) {
+          if (!value || !isSupportedBarcodeFormat(format)) {
             return
           }
 
@@ -1061,7 +1170,7 @@ function ScannerScreen({
         },
       )
       controlsRef.current = controls
-      applyBarcodeCameraTuning(controls)
+      scheduleFocusTuning(controls)
     } catch (error) {
       controlsRef.current?.stop()
       controlsRef.current = null

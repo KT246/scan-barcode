@@ -9,7 +9,6 @@ const api: DesktopApi = {
   updateSettings: (settings) => ipcRenderer.invoke('phoneScan:updateSettings', settings) as Promise<DesktopAppSettings>,
   openScannerPage: () => ipcRenderer.invoke('phoneScan:openScannerPage') as Promise<void>,
   minimizeWindow: () => ipcRenderer.invoke('phoneScan:minimizeWindow') as Promise<void>,
-  toggleMaximizeWindow: () => ipcRenderer.invoke('phoneScan:toggleMaximizeWindow') as Promise<void>,
   closeWindow: () => ipcRenderer.invoke('phoneScan:closeWindow') as Promise<void>,
   onConnectInfoChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, info: DesktopConnectInfo) => callback(info)

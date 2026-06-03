@@ -93,6 +93,9 @@ importers:
       '@zxing/browser':
         specifier: ^0.1.5
         version: 0.1.5(@zxing/library@0.21.3)
+      '@zxing/library':
+        specifier: 0.21.3
+        version: 0.21.3
       lucide-react:
         specifier: ^0.468.0
         version: 0.468.0(react@18.3.1)

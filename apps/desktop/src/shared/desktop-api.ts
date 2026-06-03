@@ -51,7 +51,6 @@ export type DesktopApi = {
   updateSettings: (settings: DesktopAppSettings) => Promise<DesktopAppSettings>
   openScannerPage: () => Promise<void>
   minimizeWindow: () => Promise<void>
-  toggleMaximizeWindow: () => Promise<void>
   closeWindow: () => Promise<void>
   onConnectInfoChanged: (callback: (info: DesktopConnectInfo) => void) => () => void
   onScanReceived: (callback: (record: DesktopScanRecord) => void) => () => void

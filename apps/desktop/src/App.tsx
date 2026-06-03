@@ -35,7 +35,6 @@ import {
   Settings,
   ShieldCheck,
   Smartphone,
-  Square,
   Trash2,
   Usb,
   Wrench,
@@ -200,9 +199,6 @@ function App() {
   const minimizeWindow = () => {
     void window.phoneScan?.minimizeWindow()
   }
-  const toggleMaximizeWindow = () => {
-    void window.phoneScan?.toggleMaximizeWindow()
-  }
   const closeWindow = () => {
     if (window.phoneScan) {
       void window.phoneScan.closeWindow()
@@ -246,9 +242,6 @@ function App() {
           <div className="window-controls" aria-hidden="true">
             <button type="button" onClick={minimizeWindow}>
               <Minus size={17} />
-            </button>
-            <button type="button" onClick={toggleMaximizeWindow}>
-              <Square size={15} />
             </button>
             <button type="button" onClick={closeWindow}>
               <X size={18} />

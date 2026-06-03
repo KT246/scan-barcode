@@ -29,10 +29,6 @@ const defaultWindowSize = {
   width: 1280,
   height: 780,
 }
-const expandedWindowSize = {
-  width: 1520,
-  height: 900,
-}
 const windowSafeMargin = {
   x: 96,
   y: 72,
@@ -57,7 +53,6 @@ process.on('unhandledRejection', (error) => {
 })
 
 let mainWindow: ElectronBrowserWindow | null = null
-let isWindowExpanded = false
 let server: ScannerServerHandle | null = null
 let appSettings: DesktopAppSettings = defaultAppSettings
 let connectInfo: DesktopConnectInfo = {
@@ -138,6 +133,14 @@ function resolveRendererEntry() {
   return path.join(desktopRoot, 'dist', 'index.html')
 }
 
+function resolveWindowIconPath() {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, 'icon.png')
+  }
+
+  return path.join(desktopRoot, 'build', 'icon.png')
+}
+
 function resolveScannerDistPath() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'scanner-pwa')
@@ -159,14 +162,6 @@ function getCenteredWindowBounds(size = defaultWindowSize) {
     x: Math.round(workArea.x + (workArea.width - width) / 2),
     y: Math.round(workArea.y + (workArea.height - height) / 2),
   }
-}
-
-function applySafeWindowBounds(window: ElectronBrowserWindow, size = defaultWindowSize) {
-  if (window.isMaximized()) {
-    window.unmaximize()
-  }
-
-  window.setBounds(getCenteredWindowBounds(size), true)
 }
 
 function broadcastConnectInfo(info: DesktopConnectInfo) {
@@ -235,7 +230,6 @@ async function startLocalServer() {
 
 async function createMainWindow() {
   writeBootLog('creating main window')
-  isWindowExpanded = false
   const windowBounds = getCenteredWindowBounds()
 
   mainWindow = new BrowserWindow({
@@ -245,8 +239,11 @@ async function createMainWindow() {
     show: false,
     frame: false,
     center: true,
+    maximizable: false,
+    fullscreenable: false,
     autoHideMenuBar: true,
     title: 'Phone Scan',
+    icon: resolveWindowIconPath(),
     backgroundColor: '#edf1f6',
     webPreferences: {
       contextIsolation: true,
@@ -285,16 +282,6 @@ ipcMain.handle('phoneScan:openScannerPage', async () => {
 })
 ipcMain.handle('phoneScan:minimizeWindow', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.minimize()
-})
-ipcMain.handle('phoneScan:toggleMaximizeWindow', (event) => {
-  const window = BrowserWindow.fromWebContents(event.sender)
-
-  if (!window) {
-    return
-  }
-
-  isWindowExpanded = !isWindowExpanded
-  applySafeWindowBounds(window, isWindowExpanded ? expandedWindowSize : defaultWindowSize)
 })
 ipcMain.handle('phoneScan:closeWindow', (event) => {
   BrowserWindow.fromWebContents(event.sender)?.close()
