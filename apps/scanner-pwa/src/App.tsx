@@ -433,6 +433,7 @@ type Translate = (key: PwaTextKey) => string
 
 let scanAudioContext: AudioContext | null = null
 let scanAudioPrimed = false
+const scanVibrationPattern = [140, 55, 140]
 
 function getScanAudioContext() {
   const AudioContextConstructor = window.AudioContext
@@ -490,7 +491,11 @@ function primeBarcodeScanFeedback() {
 }
 
 function playBarcodeScanFeedback() {
-  navigator.vibrate?.([35, 25, 35])
+  try {
+    navigator.vibrate?.(scanVibrationPattern)
+  } catch {
+    // Haptic feedback is best-effort; some browsers/devices ignore vibration.
+  }
 
   const audioContext = getScanAudioContext()
 
