@@ -413,11 +413,24 @@ h1 {
 }
 
 .release-button {
+  gap: 8px;
   min-height: 46px;
   padding: 0 16px;
   background: var(--blue);
   color: #ffffff;
   white-space: nowrap;
+}
+
+.download-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
+
+.all-releases-link {
+  color: var(--blue);
+  font-size: 13px;
+  font-weight: 850;
 }
 
 .release-note {
@@ -514,6 +527,15 @@ footer svg {
   .release-button {
     grid-column: 1 / -1;
   }
+
+  .download-actions {
+    grid-column: 1 / -1;
+    justify-items: stretch;
+  }
+
+  .all-releases-link {
+    text-align: center;
+  }
 }
 
 @media (max-width: 560px) {
@@ -574,5 +596,9 @@ footer svg {
 
   .download-card {
     grid-template-columns: 1fr;
+  }
+
+  .download-actions {
+    width: 100%;
   }
 }

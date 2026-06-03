@@ -1,6 +1,7 @@
 appId: com.kt246.phonescan
 productName: Phone Scan
 copyright: Copyright (c) 2026 KT246
+artifactName: Phone-Scan-Setup-${version}.${ext}
 
 directories:
   output: release

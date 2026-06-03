@@ -18,6 +18,7 @@ import {
   Wifi,
 } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { downloadConfig } from './downloads'
 
 type Locale = 'en' | 'lo'
 
@@ -26,9 +27,9 @@ const copy = {
     badge: 'Local desktop barcode scanner',
     headline: 'Phone Scan',
     subhead: 'Use your phone camera as a fast barcode scanner for any focused input on your desktop.',
-    primaryCta: 'View downloads',
+    primaryCta: 'Download for Windows',
     secondaryCta: 'How it works',
-    releaseNote: 'Windows build is prepared from the desktop app. macOS support can be packaged later from the same app.',
+    releaseNote: 'The installer is hosted as the official release asset. If the download does not start, view all releases.',
     platformTitle: 'Desktop tool',
     platformBody: 'Install on your computer, scan the QR with your phone, then every barcode is typed into the active input.',
     scannerTitle: 'Phone scanner',
@@ -36,10 +37,11 @@ const copy = {
     privacyTitle: 'Local only',
     privacyBody: 'No login and no cloud server. Your scans stay on your local connection.',
     downloadsTitle: 'Download options',
-    downloadsBody: 'Use GitHub Releases for installers when you are ready to publish builds.',
+    downloadsBody: 'Download the desktop tool directly. No account or cloud setup is required.',
     windows: 'Windows installer',
-    windowsStatus: 'Coming through GitHub Releases',
-    github: 'Open GitHub Releases',
+    windowsStatus: 'Windows 10/11',
+    downloadWindows: 'Download for Windows',
+    allReleases: 'View all releases',
     stepsTitle: 'Setup flow',
     stepOne: 'Install Phone Scan on desktop',
     stepTwo: 'Open the app and scan the QR from your phone',
@@ -53,9 +55,9 @@ const copy = {
     badge: 'ເຄື່ອງສະແກນ barcode ສໍາລັບ desktop',
     headline: 'Phone Scan',
     subhead: 'ໃຊ້ກ້ອງໂທລະສັບເປັນເຄື່ອງສະແກນ barcode ເຂົ້າຊ່ອງຂໍ້ມູນໃນຄອມພິວເຕີ.',
-    primaryCta: 'ເບິ່ງດາວໂຫຼດ',
+    primaryCta: 'ດາວໂຫຼດສໍາລັບ Windows',
     secondaryCta: 'ວິທີໃຊ້',
-    releaseNote: 'ຕົວຕິດຕັ້ງ Windows ຈະປ່ອຍຜ່ານ GitHub Releases. macOS ສາມາດ package ເພີ່ມຕາມຫຼັງ.',
+    releaseNote: 'ຕົວຕິດຕັ້ງຖືກເກັບເປັນ release asset ທາງການ. ຖ້າດາວໂຫຼດບໍ່ເລີ່ມ ໃຫ້ເບິ່ງ release ທັງໝົດ.',
     platformTitle: 'ເຄື່ອງມື Desktop',
     platformBody: 'ຕິດຕັ້ງໃນຄອມພິວເຕີ, ສະແກນ QR ດ້ວຍໂທລະສັບ, ແລ້ວ barcode ຈະຖືກພິມເຂົ້າຊ່ອງທີ່ເລືອກ.',
     scannerTitle: 'ເຄື່ອງສະແກນໃນໂທລະສັບ',
@@ -63,10 +65,11 @@ const copy = {
     privacyTitle: 'ໃຊ້ງານພາຍໃນເຄືອຂ່າຍ',
     privacyBody: 'ບໍ່ຕ້ອງ login ແລະບໍ່ໃຊ້ cloud server. ຂໍ້ມູນສະແກນຢູ່ໃນການເຊື່ອມຕໍ່ local.',
     downloadsTitle: 'ຕົວເລືອກດາວໂຫຼດ',
-    downloadsBody: 'ໃຊ້ GitHub Releases ເພື່ອປ່ອຍ installer ເມື່ອພ້ອມ publish.',
+    downloadsBody: 'ດາວໂຫຼດເຄື່ອງມື desktop ໂດຍກົງ. ບໍ່ຕ້ອງມີ account ຫຼື cloud setup.',
     windows: 'ຕົວຕິດຕັ້ງ Windows',
-    windowsStatus: 'ຈະປ່ອຍຜ່ານ GitHub Releases',
-    github: 'ເປີດ GitHub Releases',
+    windowsStatus: 'Windows 10/11',
+    downloadWindows: 'ດາວໂຫຼດສໍາລັບ Windows',
+    allReleases: 'ເບິ່ງ release ທັງໝົດ',
     stepsTitle: 'ຂັ້ນຕອນໃຊ້ງານ',
     stepOne: 'ຕິດຕັ້ງ Phone Scan ໃນ desktop',
     stepTwo: 'ເປີດ app ແລະສະແກນ QR ດ້ວຍໂທລະສັບ',
@@ -77,8 +80,6 @@ const copy = {
     powered: 'Powered by TJ',
   },
 }
-
-const releaseUrl = 'https://github.com/KT246/scan-barcode/releases'
 
 export default function DownloadPage() {
   const [locale, setLocale] = useState<Locale>('en')
@@ -114,7 +115,7 @@ export default function DownloadPage() {
           <h1>{t.headline}</h1>
           <p>{t.subhead}</p>
           <div className="hero-actions">
-            <a className="primary-button" href="#downloads">
+            <a className="primary-button" href={downloadConfig.windows.installerUrl}>
               <Download size={20} />
               {t.primaryCta}
             </a>
@@ -181,11 +182,17 @@ export default function DownloadPage() {
           </div>
           <div>
             <strong>{t.windows}</strong>
-            <span>{t.windowsStatus}</span>
+            <span>{t.windowsStatus} · v{downloadConfig.appVersion}</span>
           </div>
-          <a className="release-button" href={releaseUrl} target="_blank" rel="noreferrer">
-            {t.github}
-          </a>
+          <div className="download-actions">
+            <a className="release-button" href={downloadConfig.windows.installerUrl}>
+              <Download size={18} />
+              {t.downloadWindows}
+            </a>
+            <a className="all-releases-link" href={downloadConfig.releasesUrl} target="_blank" rel="noreferrer">
+              {t.allReleases}
+            </a>
+          </div>
         </div>
         <p className="release-note">{t.releaseNote}</p>
       </section>
