@@ -69,16 +69,19 @@ type ScannerSettings = {
   enable1D: boolean
   enable2D: boolean
   scanIntervalMs: number
+  stableRead: boolean
 }
 
 const appLanguageStorageKey = 'phone-scan.language'
 const scannerSettingsStorageKey = 'phone-scan.scanner-settings'
+const scanIntervalOptions = [2000, 3000, 5000, 10000]
 const defaultScannerSettings: ScannerSettings = {
   autoSend: true,
   duplicateLock: true,
   enable1D: true,
   enable2D: true,
-  scanIntervalMs: 1000,
+  scanIntervalMs: 2000,
+  stableRead: true,
 }
 const oneDimensionalScanFormats = [
   BarcodeFormat.CODE_128,
@@ -106,6 +109,8 @@ const barcodeReaderOptions = {
   delayBetweenScanSuccess: 260,
   tryPlayVideoTimeout: 3000,
 }
+const stableScanWindowMs = 900
+const scanMessageThrottleMs = 700
 const barcodeVideoConstraints: MediaStreamConstraints = {
   video: {
     facingMode: {
@@ -134,9 +139,9 @@ function getEnabledScanFormats(settings: ScannerSettings) {
   ]
 }
 
-function createBarcodeReaderHints(settings: ScannerSettings) {
+function createBarcodeReaderHints(enabledFormats: BarcodeFormat[]) {
   return new Map<DecodeHintType, unknown>([
-    [DecodeHintType.POSSIBLE_FORMATS, getEnabledScanFormats(settings)],
+    [DecodeHintType.POSSIBLE_FORMATS, enabledFormats],
     [DecodeHintType.TRY_HARDER, true],
     [DecodeHintType.ENABLE_CODE_39_EXTENDED_MODE, true],
     [DecodeHintType.ASSUME_GS1, true],
@@ -144,8 +149,72 @@ function createBarcodeReaderHints(settings: ScannerSettings) {
   ])
 }
 
-function isSupportedScanFormat(format: BarcodeFormat | null | undefined, settings: ScannerSettings) {
-  return format == null || getEnabledScanFormats(settings).includes(format)
+function isSupportedScanFormat(format: BarcodeFormat | null | undefined, enabledFormats: BarcodeFormat[]) {
+  return format == null || enabledFormats.includes(format)
+}
+
+function getNearestScanIntervalMs(value: unknown) {
+  const numericValue = Number(value)
+
+  if (!Number.isFinite(numericValue)) {
+    return defaultScannerSettings.scanIntervalMs
+  }
+
+  return scanIntervalOptions.reduce((nearest, option) => (
+    Math.abs(option - numericValue) < Math.abs(nearest - numericValue) ? option : nearest
+  ), scanIntervalOptions[0])
+}
+
+function isDigits(value: string) {
+  return /^\d+$/.test(value)
+}
+
+function hasValidWeightedChecksum(value: string, evenPositionWeight: number, oddPositionWeight: number) {
+  if (!isDigits(value) || value.length < 2) {
+    return false
+  }
+
+  const expectedCheckDigit = Number(value[value.length - 1])
+  const body = value.slice(0, -1)
+  const sum = [...body].reduce((total, digit, index) => {
+    const positionFromRight = body.length - index
+    const weight = positionFromRight % 2 === 0 ? evenPositionWeight : oddPositionWeight
+
+    return total + Number(digit) * weight
+  }, 0)
+  const actualCheckDigit = (10 - (sum % 10)) % 10
+
+  return actualCheckDigit === expectedCheckDigit
+}
+
+function hasValidEanChecksum(value: string) {
+  return hasValidWeightedChecksum(value, 1, 3)
+}
+
+function hasValidUpcAChecksum(value: string) {
+  return hasValidWeightedChecksum(value, 1, 3)
+}
+
+function isValidScanValue(value: string, format: BarcodeFormat | null | undefined) {
+  switch (format) {
+    case BarcodeFormat.EAN_13:
+      return value.length === 13 && hasValidEanChecksum(value)
+    case BarcodeFormat.EAN_8:
+      return value.length === 8 && hasValidEanChecksum(value)
+    case BarcodeFormat.UPC_A:
+      return value.length === 12 && hasValidUpcAChecksum(value)
+    case BarcodeFormat.UPC_E:
+      return isDigits(value) && (value.length === 6 || value.length === 8)
+    case BarcodeFormat.UPC_EAN_EXTENSION:
+      return isDigits(value) && (value.length === 2 || value.length === 5)
+    case BarcodeFormat.ITF:
+      return isDigits(value) && value.length >= 2 && value.length % 2 === 0
+    case BarcodeFormat.RSS_14:
+    case BarcodeFormat.RSS_EXPANDED:
+      return isDigits(value)
+    default:
+      return true
+  }
 }
 
 const pwaText = {
@@ -226,7 +295,12 @@ const pwaText = {
     enable2D: '2D codes',
     enable2DHint: 'QR, Data Matrix, Aztec, PDF417 and similar codes.',
     scanInterval: 'Scan interval',
-    scanIntervalHint: 'Minimum delay before accepting the next read.',
+    scanIntervalHint: 'Minimum delay before accepting the next code.',
+    stableRead: 'Stable read',
+    stableReadHint: 'Confirm the same code twice before accepting it.',
+    confirmingScan: 'Confirming code...',
+    invalidBarcodeIgnored: 'Invalid barcode ignored.',
+    waitingNextScan: 'Waiting {seconds}s before next scan.',
     ignoreDuplicates: 'Ignore duplicates',
     ignoreDuplicatesHint: 'Block the same barcode while it stays in frame.',
     autoSend: 'Auto send',
@@ -325,7 +399,12 @@ const pwaText = {
     enable2D: 'ລະຫັດ 2D',
     enable2DHint: 'QR, Data Matrix, Aztec, PDF417 ແລະລະຫັດຄ້າຍຄືກັນ.',
     scanInterval: 'ໄລຍະຫ່າງການສະແກນ',
-    scanIntervalHint: 'ເວລາຂັ້ນຕ່ຳກ່ອນຮັບການອ່ານຄັ້ງຕໍ່ໄປ.',
+    scanIntervalHint: 'ເວລາຂັ້ນຕ່ຳກ່ອນຮັບລະຫັດຄັ້ງຕໍ່ໄປ.',
+    stableRead: 'ອ່ານໃຫ້ນິ່ງ',
+    stableReadHint: 'ຢືນຢັນລະຫັດເດີມ 2 ຄັ້ງກ່ອນຮັບ.',
+    confirmingScan: 'ກຳລັງຢືນຢັນລະຫັດ...',
+    invalidBarcodeIgnored: 'ຂ້າມ barcode ທີ່ບໍ່ຖືກຕ້ອງ.',
+    waitingNextScan: 'ລໍຖ້າ {seconds}s ກ່ອນສະແກນຄັ້ງຕໍ່ໄປ.',
     ignoreDuplicates: 'ຂ້າມຄ່າຊ້ຳ',
     ignoreDuplicatesHint: 'ບລັອກ barcode ເດີມຂະນະທີ່ຍັງຢູ່ໃນກອບ.',
     autoSend: 'ສົ່ງອັດຕະໂນມັດ',
@@ -534,9 +613,7 @@ async function applyBarcodeCameraTuning(controls: IScannerControls, videoElement
 }
 
 function normalizeScannerSettings(settings: Partial<ScannerSettings>): ScannerSettings {
-  const scanIntervalMs = Number.isFinite(settings.scanIntervalMs)
-    ? Math.max(200, Math.min(10000, Math.round(settings.scanIntervalMs ?? defaultScannerSettings.scanIntervalMs)))
-    : defaultScannerSettings.scanIntervalMs
+  const scanIntervalMs = getNearestScanIntervalMs(settings.scanIntervalMs)
   let enable1D = settings.enable1D ?? defaultScannerSettings.enable1D
   const enable2D = settings.enable2D ?? defaultScannerSettings.enable2D
 
@@ -550,6 +627,7 @@ function normalizeScannerSettings(settings: Partial<ScannerSettings>): ScannerSe
     enable1D,
     enable2D,
     scanIntervalMs,
+    stableRead: settings.stableRead ?? defaultScannerSettings.stableRead,
   }
 }
 
@@ -587,6 +665,10 @@ function formatScanTime(timestamp: number) {
     minute: '2-digit',
     second: '2-digit',
   }).format(new Date(timestamp))
+}
+
+function formatScanInterval(ms: number) {
+  return `${ms / 1000}s`
 }
 
 function getDesktopScannerUrl(value: string) {
@@ -1207,7 +1289,10 @@ function ScannerScreen({
   const recordLocalScanRef = useRef(recordLocalScan)
   const sendBarcodeRef = useRef(sendBarcode)
   const settingsRef = useRef(scannerSettings)
+  const enabledFormatsRef = useRef(getEnabledScanFormats(scannerSettings))
   const focusTuneTimersRef = useRef<number[]>([])
+  const pendingStableScanRef = useRef<{ value: string; format: BarcodeFormat | null; count: number; at: number } | null>(null)
+  const scanMessageUpdateRef = useRef<{ text: string; at: number } | null>(null)
   const [scannerActive, setScannerActive] = useState(false)
   const [scanMessage, setScanMessage] = useState(t('alignBarcode'))
   const cameraNeedsTrustedHttps = !window.isSecureContext
@@ -1220,7 +1305,54 @@ function ScannerScreen({
 
   useEffect(() => {
     settingsRef.current = scannerSettings
+    enabledFormatsRef.current = getEnabledScanFormats(scannerSettings)
   }, [scannerSettings])
+
+  const updateScanMessage = (message: string, throttleMs = 0) => {
+    const timestamp = Date.now()
+    const lastUpdate = scanMessageUpdateRef.current
+
+    if (throttleMs > 0 && lastUpdate?.text === message && timestamp - lastUpdate.at < throttleMs) {
+      return
+    }
+
+    scanMessageUpdateRef.current = { text: message, at: timestamp }
+    setScanMessage(message)
+  }
+
+  const confirmStableScan = (
+    value: string,
+    format: BarcodeFormat | null | undefined,
+    timestamp: number,
+    activeSettings: ScannerSettings,
+  ) => {
+    if (!activeSettings.stableRead) {
+      return true
+    }
+
+    const normalizedFormat = format ?? null
+    const pending = pendingStableScanRef.current
+    const isSamePendingScan = pending?.value === value
+      && pending.format === normalizedFormat
+      && timestamp - pending.at <= stableScanWindowMs
+
+    if (!isSamePendingScan) {
+      pendingStableScanRef.current = { value, format: normalizedFormat, count: 1, at: timestamp }
+      updateScanMessage(t('confirmingScan'), scanMessageThrottleMs)
+      return false
+    }
+
+    const count = pending.count + 1
+
+    if (count < 2) {
+      pendingStableScanRef.current = { value, format: normalizedFormat, count, at: timestamp }
+      updateScanMessage(t('confirmingScan'), scanMessageThrottleMs)
+      return false
+    }
+
+    pendingStableScanRef.current = null
+    return true
+  }
 
   const clearFocusTuneTimers = () => {
     focusTuneTimersRef.current.forEach((timer) => window.clearTimeout(timer))
@@ -1240,6 +1372,7 @@ function ScannerScreen({
     controlsRef.current?.stop()
     controlsRef.current = null
     scanInFlightRef.current = false
+    pendingStableScanRef.current = null
     setScannerActive(false)
   }
 
@@ -1249,15 +1382,15 @@ function ScannerScreen({
     }
 
     if (cameraNeedsTrustedHttps) {
-      setScanMessage(t('trustedHttpsMessage'))
+      updateScanMessage(t('trustedHttpsMessage'))
       return
     }
 
     try {
-      const reader = new BrowserMultiFormatReader(createBarcodeReaderHints(settingsRef.current), barcodeReaderOptions)
+      const reader = new BrowserMultiFormatReader(createBarcodeReaderHints(enabledFormatsRef.current), barcodeReaderOptions)
       scanInFlightRef.current = false
       setScannerActive(true)
-      setScanMessage(t('scanningBarcodeOnly'))
+      updateScanMessage(t('scanningBarcodeOnly'))
       const controls = await reader.decodeFromConstraints(
         barcodeVideoConstraints,
         videoRef.current ?? undefined,
@@ -1271,14 +1404,20 @@ function ScannerScreen({
           const scanType = getScanType(format)
           const activeSettings = settingsRef.current
 
-          if (!value || !isSupportedScanFormat(format, activeSettings)) {
+          if (!value || !isSupportedScanFormat(format, enabledFormatsRef.current)) {
             return
           }
 
           const scannerUrl = getDesktopScannerUrl(value)
 
           if (scannerUrl) {
-            setScanMessage(t('qrIgnored'))
+            updateScanMessage(t('qrIgnored'), scanMessageThrottleMs)
+            return
+          }
+
+          if (!isValidScanValue(value, format)) {
+            pendingStableScanRef.current = null
+            updateScanMessage(t('invalidBarcodeIgnored'), scanMessageThrottleMs)
             return
           }
 
@@ -1286,11 +1425,19 @@ function ScannerScreen({
           const lastAcceptedScan = lastAcceptedScanRef.current
           const elapsedSinceLastScan = lastAcceptedScan ? timestamp - lastAcceptedScan.at : Number.POSITIVE_INFINITY
 
+          if (!confirmStableScan(value, format, timestamp, activeSettings)) {
+            return
+          }
+
           if (lastAcceptedScan && elapsedSinceLastScan < activeSettings.scanIntervalMs) {
-            setScanMessage(
+            updateScanMessage(
               lastAcceptedScan.value === value && activeSettings.duplicateLock
                 ? t('duplicateBarcodeIgnored')
-                : `Waiting ${Math.ceil((activeSettings.scanIntervalMs - elapsedSinceLastScan) / 1000)}s before next scan.`,
+                : t('waitingNextScan').replace(
+                  '{seconds}',
+                  String(Math.ceil((activeSettings.scanIntervalMs - elapsedSinceLastScan) / 1000)),
+                ),
+              scanMessageThrottleMs,
             )
             return
           }
@@ -1303,19 +1450,19 @@ function ScannerScreen({
             playBarcodeScanFeedback()
 
             if (!activeSettings.autoSend) {
-              setScanMessage(t('autoSendOff'))
+              updateScanMessage(t('autoSendOff'))
               return
             }
 
             if (!connectionRef.current.connected) {
-              setScanMessage(t('barcodeScannedNoDesktop'))
+              updateScanMessage(t('barcodeScannedNoDesktop'))
               await sendBarcodeRef.current(value, scanType, timestamp)
               return
             }
 
-            setScanMessage(t('barcodeSending'))
+            updateScanMessage(t('barcodeSending'))
             const sendResult = await sendBarcodeRef.current(value, scanType, timestamp)
-            setScanMessage(
+            updateScanMessage(
               sendResult.delivered
                 ? sendResult.typed
                   ? t('desktopTypedBarcode')
@@ -1333,7 +1480,7 @@ function ScannerScreen({
       controlsRef.current?.stop()
       controlsRef.current = null
       setScannerActive(false)
-      setScanMessage(error instanceof Error ? error.message : t('cameraUnavailable'))
+      updateScanMessage(error instanceof Error ? error.message : t('cameraUnavailable'))
     }
   }
 
@@ -1454,13 +1601,30 @@ function SettingsScreen({
             <strong>{t('scanInterval')}</strong>
             <small>{t('scanIntervalHint')}</small>
           </span>
+          <div className="scan-interval-options" role="group" aria-label={t('scanInterval')}>
+            {scanIntervalOptions.map((intervalMs) => (
+              <button
+                key={intervalMs}
+                type="button"
+                className={scannerSettings.scanIntervalMs === intervalMs ? 'active' : ''}
+                aria-pressed={scannerSettings.scanIntervalMs === intervalMs}
+                onClick={() => updateScannerSettings({ scanIntervalMs: intervalMs })}
+              >
+                {formatScanInterval(intervalMs)}
+              </button>
+            ))}
+          </div>
+        </label>
+
+        <label className="scanner-setting-row">
+          <span>
+            <strong>{t('stableRead')}</strong>
+            <small>{t('stableReadHint')}</small>
+          </span>
           <input
-            min="0.2"
-            max="10"
-            step="0.1"
-            type="number"
-            value={scannerSettings.scanIntervalMs / 1000}
-            onChange={(event) => updateScannerSettings({ scanIntervalMs: Number(event.target.value) * 1000 })}
+            type="checkbox"
+            checked={scannerSettings.stableRead}
+            onChange={(event) => updateScannerSettings({ stableRead: event.target.checked })}
           />
         </label>
 

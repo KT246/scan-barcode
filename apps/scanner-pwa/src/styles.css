@@ -1147,17 +1147,30 @@ a {
   min-width: 0;
 }
 
-.scanner-setting-row input[type="number"] {
-  width: 104px;
-  height: 43px;
-  flex: 0 0 auto;
-  border: 1px solid #ccd7e6;
+.scan-interval-options {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(54px, 1fr));
+  gap: 7px;
+  width: min(320px, 100%);
+  flex: 0 1 320px;
+}
+
+.scan-interval-options button {
+  height: 42px;
+  border: 1px solid #cbd8eb;
   border-radius: 10px;
-  color: var(--ink);
+  color: #2d3c56;
   background: #fff;
-  font-size: 18px;
-  font-weight: 680;
-  text-align: center;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 820;
+}
+
+.scan-interval-options button.active {
+  border-color: var(--blue);
+  color: #fff;
+  background: var(--blue);
+  box-shadow: 0 8px 18px rgba(18, 100, 244, 0.18);
 }
 
 .scanner-setting-row input[type="checkbox"] {
@@ -3062,11 +3075,17 @@ a {
   padding-top: 9px;
 }
 
-.app-screen .scanner-setting-row input[type="number"] {
-  width: 76px;
-  height: 36px;
+.app-screen .scan-interval-options {
+  grid-template-columns: repeat(4, minmax(43px, 1fr));
+  gap: 5px;
+  width: min(220px, 100%);
+  flex-basis: 220px;
+}
+
+.app-screen .scan-interval-options button {
+  height: 34px;
   border-radius: 8px;
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .app-screen .scanner-setting-row input[type="checkbox"] {
