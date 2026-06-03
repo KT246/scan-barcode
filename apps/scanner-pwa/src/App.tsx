@@ -275,36 +275,88 @@ type PwaTextKey = keyof typeof pwaText.en
 type Translate = (key: PwaTextKey) => string
 
 let scanAudioContext: AudioContext | null = null
+let scanAudioPrimed = false
 
-function playBarcodeScanFeedback() {
-  navigator.vibrate?.(45)
-
+function getScanAudioContext() {
   const AudioContextConstructor = window.AudioContext
     ?? (window as Window & typeof globalThis & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
 
   if (!AudioContextConstructor) {
-    return
+    return null
   }
 
   try {
     const audioContext = scanAudioContext ?? new AudioContextConstructor()
     scanAudioContext = audioContext
 
+    return audioContext
+  } catch {
+    return null
+  }
+}
+
+function primeBarcodeScanFeedback() {
+  const audioContext = getScanAudioContext()
+
+  if (!audioContext || scanAudioPrimed) {
+    return
+  }
+
+  const playSilentPulse = () => {
+    try {
+      const now = audioContext.currentTime
+      const oscillator = audioContext.createOscillator()
+      const gain = audioContext.createGain()
+
+      gain.gain.setValueAtTime(0.0001, now)
+      oscillator.frequency.setValueAtTime(1200, now)
+      oscillator.connect(gain)
+      gain.connect(audioContext.destination)
+      oscillator.start(now)
+      oscillator.stop(now + 0.01)
+      oscillator.addEventListener('ended', () => {
+        oscillator.disconnect()
+        gain.disconnect()
+      }, { once: true })
+      scanAudioPrimed = true
+    } catch {
+      // Best-effort unlock for browsers that require a user gesture before audio output.
+    }
+  }
+
+  if (audioContext.state === 'suspended') {
+    void audioContext.resume().then(playSilentPulse).catch(() => undefined)
+    return
+  }
+
+  playSilentPulse()
+}
+
+function playBarcodeScanFeedback() {
+  navigator.vibrate?.([35, 25, 35])
+
+  const audioContext = getScanAudioContext()
+
+  if (!audioContext) {
+    return
+  }
+
+  try {
     const playSound = () => {
       const now = audioContext.currentTime
       const oscillator = audioContext.createOscillator()
       const gain = audioContext.createGain()
 
       oscillator.type = 'square'
-      oscillator.frequency.setValueAtTime(1180, now)
-      oscillator.frequency.exponentialRampToValueAtTime(920, now + 0.1)
+      oscillator.frequency.setValueAtTime(2200, now)
+      oscillator.frequency.exponentialRampToValueAtTime(2050, now + 0.065)
       gain.gain.setValueAtTime(0.0001, now)
-      gain.gain.exponentialRampToValueAtTime(0.18, now + 0.01)
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.14)
+      gain.gain.exponentialRampToValueAtTime(0.24, now + 0.006)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.085)
       oscillator.connect(gain)
       gain.connect(audioContext.destination)
       oscillator.start(now)
-      oscillator.stop(now + 0.15)
+      oscillator.stop(now + 0.095)
       oscillator.addEventListener('ended', () => {
         oscillator.disconnect()
         gain.disconnect()
@@ -428,6 +480,25 @@ function ScannerApp() {
   const updateScannerSettings = (nextSettings: Partial<ScannerSettings>) => {
     setScannerSettings((current) => normalizeScannerSettings({ ...current, ...nextSettings }))
   }
+
+  useEffect(() => {
+    const unlockAudio = () => {
+      primeBarcodeScanFeedback()
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('touchstart', unlockAudio)
+      window.removeEventListener('keydown', unlockAudio)
+    }
+
+    window.addEventListener('pointerdown', unlockAudio)
+    window.addEventListener('touchstart', unlockAudio)
+    window.addEventListener('keydown', unlockAudio)
+
+    return () => {
+      window.removeEventListener('pointerdown', unlockAudio)
+      window.removeEventListener('touchstart', unlockAudio)
+      window.removeEventListener('keydown', unlockAudio)
+    }
+  }, [])
 
   useEffect(() => {
     try {
