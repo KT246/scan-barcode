@@ -17,6 +17,9 @@ importers:
       '@fastify/static':
         specifier: ^9.1.3
         version: 9.1.3
+      '@fontsource/noto-sans-lao':
+        specifier: 5.2.8
+        version: 5.2.8
       '@web-barcode/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -987,6 +990,9 @@ packages:
 
   '@fastify/static@9.1.3':
     resolution: {integrity: sha512-aXrYtsiryLhRxRNaxNqsn7FUISeb7rB9q4eHUPIot5aeQBLNahnz1m6thzm7JWC1poSGXS9XrX8DvuMivp2hkQ==}
+
+  '@fontsource/noto-sans-lao@5.2.8':
+    resolution: {integrity: sha512-Ge85hNE9YetzzRjPBBWKhQKez3t2mtYSM1N3B7sEIkTQn7sn9wX2KzfFb8zJ0gXp47CRb32Kw3A7LOoeiFua1g==}
 
   '@hapi/address@5.1.1':
     resolution: {integrity: sha512-A+po2d/dVoY7cYajycYI43ZbYMXukuopIsqCjh5QzsBCipDtdofHntljDlpccMjIfTy6UOkg+5KPriwYch2bXA==}
@@ -3776,6 +3782,8 @@ snapshots:
       fastify-plugin: 5.1.0
       fastq: 1.20.1
       glob: 13.0.6
+
+  '@fontsource/noto-sans-lao@5.2.8': {}
 
   '@hapi/address@5.1.1':
     dependencies:

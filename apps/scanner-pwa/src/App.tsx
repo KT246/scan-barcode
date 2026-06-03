@@ -3,17 +3,12 @@ import { BrowserMultiFormatOneDReader, BrowserMultiFormatReader, type IScannerCo
 import { io, type Socket } from 'socket.io-client'
 import {
   Barcode,
-  CheckCircle2,
-  Download,
-  ExternalLink,
   Info,
   Link2,
   Monitor,
   Send,
   Settings,
-  ShieldCheck,
   ScanLine,
-  Smartphone,
   Wifi,
   X,
 } from 'lucide-react'
@@ -70,8 +65,6 @@ const defaultScannerSettings: ScannerSettings = {
   duplicateLock: true,
   scanIntervalMs: 1000,
 }
-const desktopReleaseUrl = 'https://github.com/KT246/scan-barcode/releases/latest'
-const desktopVersion = 'v0.1.0'
 const barcodeReaderOptions = {
   delayBetweenScanAttempts: 70,
   delayBetweenScanSuccess: 350,
@@ -220,15 +213,8 @@ function getInitialConnection(): DesktopConnection {
   }
 }
 
-function shouldOpenScannerApp() {
-  const url = new URL(window.location.href)
-  const scanPath = url.pathname === '/scan' || url.pathname.endsWith('/scan')
-
-  return scanPath || Boolean(url.searchParams.get('token'))
-}
-
 function App() {
-  return shouldOpenScannerApp() ? <ScannerApp /> : <DownloadPage />
+  return <ScannerApp />
 }
 
 function ScannerApp() {
@@ -453,113 +439,6 @@ function ScannerApp() {
         )}
 
         <MobileTabs page={page} setPage={setPage} />
-      </section>
-    </main>
-  )
-}
-
-function DownloadPage() {
-  const steps = [
-    'Install Phone Scan Desktop on Windows.',
-    'Open the desktop app and scan the QR with your phone.',
-    'Scan barcodes and they type into the focused input.',
-  ]
-  const requirements = [
-    'Windows desktop app',
-    'Same Wi-Fi or USB tethering',
-    'Local connection only, no cloud login',
-  ]
-
-  return (
-    <main className="download-page" aria-label="Phone Scan desktop download">
-      <section className="download-hero">
-        <nav className="download-nav" aria-label="Download page navigation">
-          <a className="download-brand" href="/">
-            <img src="/app-logo-icon.png" alt="" />
-            <span>Phone Scan</span>
-          </a>
-          <a className="download-release-link" href={desktopReleaseUrl} target="_blank" rel="noreferrer">
-            <span>{desktopVersion}</span>
-            <ExternalLink size={17} strokeWidth={2.2} />
-          </a>
-        </nav>
-
-        <div className="download-hero-grid">
-          <div className="download-copy">
-            <span className="download-kicker">
-              <ShieldCheck size={19} strokeWidth={2.4} />
-              Local desktop barcode scanner
-            </span>
-            <h1>Scan barcodes from your phone into your computer.</h1>
-            <p>
-              Download the Windows desktop tool, connect your phone with the QR code, then scan product barcodes
-              directly into any focused input.
-            </p>
-
-            <div className="download-actions">
-              <a className="download-primary" href={desktopReleaseUrl} target="_blank" rel="noreferrer">
-                <Download size={24} strokeWidth={2.5} />
-                <span>Download for Windows</span>
-              </a>
-              <a className="download-secondary" href={desktopReleaseUrl} target="_blank" rel="noreferrer">
-                <ExternalLink size={21} strokeWidth={2.3} />
-                <span>View releases</span>
-              </a>
-            </div>
-          </div>
-
-          <div className="download-preview" aria-hidden="true">
-            <div className="download-window">
-              <div className="download-window-bar">
-                <span />
-                <span />
-                <span />
-              </div>
-              <div className="download-window-body">
-                <img src="/app-logo-icon.png" alt="" />
-                <div>
-                  <strong>Phone Scan Desktop</strong>
-                  <p>QR connection ready</p>
-                </div>
-                <div className="download-qr-art">
-                  {Array.from({ length: 49 }, (_, index) => (
-                    <i key={index} className={index % 3 === 0 || index % 7 === 0 ? 'on' : ''} />
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div className="download-phone-card">
-              <Smartphone size={31} strokeWidth={2.2} />
-              <span>Phone connected</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="download-section">
-        <div className="download-panel">
-          <h2>How it works</h2>
-          <div className="download-steps">
-            {steps.map((step, index) => (
-              <div className="download-step" key={step}>
-                <span>{index + 1}</span>
-                <p>{step}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="download-panel">
-          <h2>Requirements</h2>
-          <div className="download-requirements">
-            {requirements.map((item) => (
-              <div className="download-requirement" key={item}>
-                <CheckCircle2 size={21} strokeWidth={2.4} />
-                <span>{item}</span>
-              </div>
-            ))}
-          </div>
-        </div>
       </section>
     </main>
   )

@@ -15,9 +15,9 @@ import {
   Download,
   ExternalLink,
   FileText,
-  Home,
   Info,
   Keyboard,
+  Languages,
   Laptop,
   Lightbulb,
   Link2,
@@ -43,12 +43,15 @@ import {
   X,
 } from 'lucide-react'
 import type {
+  DesktopAppSettings,
   DesktopConnectInfo,
+  DesktopLanguage,
   DesktopScanRecord,
   DesktopScanStatus,
   DesktopTypingSettings,
   DesktopTypingSuffix,
 } from './shared/desktop-api'
+import { desktopCopy, languageOptions, type DesktopCopy } from './shared/i18n'
 
 const fallbackScannerUrl = 'https://192.168.1.10:8787/scan?token=ABC123'
 const fallbackConnectInfo: DesktopConnectInfo = {
@@ -64,16 +67,37 @@ const fallbackConnectInfo: DesktopConnectInfo = {
   tokenPreview: 'ABC...123',
   connectedClients: 0,
 }
+const fallbackSettings: DesktopAppSettings = {
+  autoEnter: true,
+  autoTab: false,
+  suffix: 'enter',
+  typingDelayMs: 80,
+  language: 'en',
+  hasChosenLanguage: false,
+}
 type SettingsSaveState = 'idle' | 'saving' | 'saved' | 'error'
 
 function App() {
   const [connectInfo, setConnectInfo] = useState<DesktopConnectInfo>(fallbackConnectInfo)
   const [scanHistory, setScanHistory] = useState<DesktopScanRecord[]>([])
+  const [settings, setSettings] = useState<DesktopAppSettings>(fallbackSettings)
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const copy = desktopCopy[settings.language]
 
   useEffect(() => {
     const api = window.phoneScan
 
     if (!api) {
+      try {
+        const storedLanguage = window.localStorage?.getItem('phoneScan.language')
+
+        if (storedLanguage === 'en' || storedLanguage === 'lo') {
+          setSettings({ ...fallbackSettings, language: storedLanguage, hasChosenLanguage: true })
+        }
+      } catch {
+        // Browser fallback storage is optional.
+      }
+      setSettingsLoaded(true)
       QRCode.toDataURL(fallbackScannerUrl, {
         errorCorrectionLevel: 'M',
         margin: 1,
@@ -89,6 +113,17 @@ function App() {
     }
 
     let mounted = true
+
+    api.getSettings().then((nextSettings) => {
+      if (mounted) {
+        setSettings(nextSettings)
+        setSettingsLoaded(true)
+      }
+    }).catch(() => {
+      if (mounted) {
+        setSettingsLoaded(true)
+      }
+    })
 
     api.getConnectInfo().then((info) => {
       if (mounted) {
@@ -142,6 +177,26 @@ function App() {
       window.open(connectInfo.scannerUrl, '_blank', 'noopener,noreferrer')
     }
   }
+  const selectLanguage = async (language: DesktopLanguage) => {
+    const nextSettings = {
+      ...settings,
+      language,
+      hasChosenLanguage: true,
+    }
+    setSettings(nextSettings)
+
+    if (window.phoneScan) {
+      const savedSettings = await window.phoneScan.updateSettings(nextSettings)
+      setSettings(savedSettings)
+      return
+    }
+
+    try {
+      window.localStorage?.setItem('phoneScan.language', language)
+    } catch {
+      // Browser fallback storage is optional.
+    }
+  }
   const minimizeWindow = () => {
     void window.phoneScan?.minimizeWindow()
   }
@@ -176,7 +231,11 @@ function App() {
 
   return (
     <main className="desktop-stage">
-      <section className="desktop-window" aria-label="Phone Scan Desktop">
+      <section
+        className={`desktop-window language-${settings.language}`}
+        lang={settings.language === 'lo' ? 'lo-LA' : 'en'}
+        aria-label="Phone Scan Desktop"
+      >
         <div className="titlebar">
           <div className="titlebar-left">
             <div className="app-mark small">
@@ -197,46 +256,99 @@ function App() {
           </div>
         </div>
 
-        <div className="app-shell">
-          <aside className="sidebar" aria-label="Main navigation">
-            <div className="sidebar-logo">
-              <ScanBarcode size={66} strokeWidth={1.9} />
-            </div>
-
-            <nav className="nav-list">
-              <div className="nav-item active" aria-current="page">
-                <Home size={26} fill="currentColor" strokeWidth={2.2} />
-                <span>Home</span>
-              </div>
-            </nav>
-
-            <div className="version">
-              <span className="version-dot" />
-              <span>v1.0.0</span>
-            </div>
-          </aside>
-
-          <HomeScreen
-            connectInfo={connectInfo}
-            latestScan={scanHistory[0] ?? null}
-            onCopyScannerUrl={copyScannerUrl}
-            onOpenScannerPage={openScannerPage}
-            onRefreshConnectInfo={refreshConnectInfo}
-          />
+        <div className="app-shell app-shell-centered">
+          {!settingsLoaded ? (
+            <LanguageLoadingScreen />
+          ) : settings.hasChosenLanguage ? (
+            <HomeScreen
+              connectInfo={connectInfo}
+              copy={copy}
+              latestScan={scanHistory[0] ?? null}
+              onCopyScannerUrl={copyScannerUrl}
+              onOpenScannerPage={openScannerPage}
+              onRefreshConnectInfo={refreshConnectInfo}
+            />
+          ) : (
+            <LanguageSelectionScreen
+              copy={copy}
+              selectedLanguage={settings.language}
+              onSelectLanguage={selectLanguage}
+            />
+          )}
         </div>
       </section>
     </main>
   )
 }
 
+function LanguageLoadingScreen() {
+  return (
+    <section className="content-panel language-panel">
+      <div className="language-card language-loading-card">
+        <div className="language-icon">
+          <Languages size={34} strokeWidth={2.1} />
+        </div>
+        <h1>Phone Scan</h1>
+      </div>
+    </section>
+  )
+}
+
+function LanguageSelectionScreen({
+  copy,
+  selectedLanguage,
+  onSelectLanguage,
+}: {
+  copy: DesktopCopy
+  selectedLanguage: DesktopLanguage
+  onSelectLanguage: (language: DesktopLanguage) => void
+}) {
+  return (
+    <section className="content-panel language-panel">
+      <div className="language-card">
+        <div className="language-icon">
+          <Languages size={34} strokeWidth={2.1} />
+        </div>
+        <span className="language-eyebrow">{copy.language.eyebrow}</span>
+        <h1>{copy.language.title}</h1>
+        <p>{copy.language.description}</p>
+
+        <div className="language-options">
+          {languageOptions.map((option) => {
+            const selected = option.code === selectedLanguage
+
+            return (
+              <button
+                className={`language-option language-option-${option.code} ${selected ? 'selected' : ''}`}
+                key={option.code}
+                lang={option.code === 'lo' ? 'lo-LA' : 'en'}
+                type="button"
+                onClick={() => onSelectLanguage(option.code)}
+              >
+                <span>
+                  <strong>{option.nativeLabel}</strong>
+                  <small>{option.description}</small>
+                </span>
+                <em>{selected ? copy.language.selected : copy.language.continue}</em>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    </section>
+  )
+}
+
 function HomeScreen({
   connectInfo,
+  copy,
   latestScan,
   onCopyScannerUrl,
   onOpenScannerPage,
   onRefreshConnectInfo,
 }: {
   connectInfo: DesktopConnectInfo
+  copy: DesktopCopy
   latestScan: DesktopScanRecord | null
   onCopyScannerUrl: () => void
   onOpenScannerPage: () => void
@@ -248,17 +360,6 @@ function HomeScreen({
   return (
     <section className="content-panel">
       <div className="main-content">
-        <header className="hero">
-          <div className="app-mark hero-mark">
-            <Smartphone size={66} strokeWidth={1.9} />
-            <span className="hero-barcode" />
-          </div>
-          <div>
-            <h1>Phone Scan</h1>
-            <p>Connect your phone and scan directly into any focused input.</p>
-          </div>
-        </header>
-
         <div className="dashboard-grid">
           <div className="left-column">
             <section className="card status-card">
@@ -266,34 +367,34 @@ function HomeScreen({
                 <span className="check-badge">
                   <Check size={27} strokeWidth={3.2} />
                 </span>
-                <span>Local Server Status:</span>
-                <strong>{isRunning ? 'Running' : connectInfo.status === 'error' ? 'Error' : 'Starting'}</strong>
+                <span>{copy.status.localServer}</span>
+                <strong>{isRunning ? copy.status.running : connectInfo.status === 'error' ? copy.status.error : copy.status.starting}</strong>
               </div>
 
               <div className="info-list">
-                <InfoRow icon={<Laptop />} label="PC IP Address" value={connectInfo.ipAddress} />
-                <InfoRow icon={<Network />} label="Port" value={`${connectInfo.protocol.toUpperCase()} ${connectInfo.port}`} />
-                <InfoRow icon={<Wifi />} label="Connection Method" value="Wi-Fi / USB Tethering" />
+                <InfoRow icon={<Laptop />} label={copy.status.pcIpAddress} value={connectInfo.ipAddress} />
+                <InfoRow icon={<Network />} label={copy.status.port} value={`${connectInfo.protocol.toUpperCase()} ${connectInfo.port}`} />
+                <InfoRow icon={<Wifi />} label={copy.status.connectionMethod} value={copy.status.connectionMethodValue} />
               </div>
             </section>
 
             <section className="card instructions-card">
               <div className="section-title">
                 <FileText size={29} />
-                <h2>Quick Instructions</h2>
+                <h2>{copy.instructions.title}</h2>
               </div>
               <ol className="steps">
                 <li>
                   <span>1</span>
-                  <p>Open this tool</p>
+                  <p>{copy.instructions.openTool}</p>
                 </li>
                 <li>
                   <span>2</span>
-                  <p>Scan the QR with your phone</p>
+                  <p>{copy.instructions.scanQr}</p>
                 </li>
                 <li>
                   <span>3</span>
-                  <p>Start scanning barcodes</p>
+                  <p>{copy.instructions.scanBarcodes}</p>
                 </li>
               </ol>
             </section>
@@ -301,7 +402,7 @@ function HomeScreen({
 
           <div className="center-column">
             <section className="card qr-card">
-              <h2>Scan with your phone to connect</h2>
+              <h2>{copy.qr.title}</h2>
               <div className="qr-frame">
                 {connectInfo.qrDataUrl ? <img src={connectInfo.qrDataUrl} alt="Scanner connection QR" /> : null}
               </div>
@@ -310,25 +411,23 @@ function HomeScreen({
             <section className="card action-card">
               <button className="secondary-button" type="button" onClick={onRefreshConnectInfo}>
                 <RefreshCw size={30} />
-                <span>Refresh QR</span>
+                <span>{copy.qr.refresh}</span>
               </button>
               <button className="secondary-button" type="button" onClick={onCopyScannerUrl}>
                 <Copy size={28} />
-                <span>Copy Link</span>
+                <span>{copy.qr.copyLink}</span>
               </button>
               <button className="primary-button" type="button" onClick={onOpenScannerPage}>
                 <ExternalLink size={28} />
-                <span>Open Scanner Page</span>
+                <span>{copy.qr.openScanner}</span>
               </button>
             </section>
-
-            <DesktopFlowCard connectInfo={connectInfo} latestScan={latestScan} />
           </div>
 
           <section className="card phone-card">
             <div className="phone-status">
               <span className={`offline-dot ${hasPhone ? 'online-dot' : ''}`} />
-              <span>Phone Status: <strong>{hasPhone ? 'Connected' : 'Not connected'}</strong></span>
+              <span>{copy.phone.status} <strong>{hasPhone ? copy.phone.connected : copy.phone.notConnected}</strong></span>
             </div>
 
             <div className="phone-empty-state">
@@ -339,28 +438,36 @@ function HomeScreen({
                 </span>
               </div>
               <p>
-                {hasPhone ? `${connectInfo.connectedClients} phone connected` : 'Your phone will appear here'}
+                {hasPhone ? `${connectInfo.connectedClients} ${copy.phone.phoneConnected}` : copy.phone.willAppear}
                 <br />
-                {hasPhone ? `${connectInfo.ipAddress}:${connectInfo.port}` : 'once connected.'}
+                {hasPhone ? `${connectInfo.ipAddress}:${connectInfo.port}` : copy.phone.onceConnected}
               </p>
             </div>
+
+            <DesktopFlowPanel connectInfo={connectInfo} copy={copy} latestScan={latestScan} />
           </section>
         </div>
       </div>
 
       <footer className="footer-note">
         <ShieldCheck size={33} strokeWidth={2.2} />
-        <span>No cloud server. No login. Local connection only.</span>
+        <span>{copy.footer.privacy}</span>
+        <span className="footer-divider" />
+        <span className="powered-by">
+          {copy.footer.poweredBy} <strong>TJ</strong>
+        </span>
       </footer>
     </section>
   )
 }
 
-function DesktopFlowCard({
+function DesktopFlowPanel({
   connectInfo,
+  copy,
   latestScan,
 }: {
   connectInfo: DesktopConnectInfo
+  copy: DesktopCopy
   latestScan: DesktopScanRecord | null
 }) {
   const hasPhone = connectInfo.connectedClients > 0
@@ -368,33 +475,33 @@ function DesktopFlowCard({
   const typingFailed = latestScan?.status === 'Failed'
 
   return (
-    <section className="card desktop-flow-card">
+    <div className="desktop-flow-panel">
       <div className="section-title">
         <ScanBarcode size={25} />
-        <h2>Live Flow</h2>
+        <h2>{copy.flow.title}</h2>
       </div>
 
       <div className="flow-status-list">
         <FlowStatusRow
-          label="Phone connected"
-          status={hasPhone ? 'Connected' : 'Waiting'}
+          label={copy.flow.phoneConnected}
+          status={hasPhone ? copy.phone.connected : copy.flow.waiting}
           tone={hasPhone ? 'good' : 'neutral'}
-          detail={hasPhone ? `${connectInfo.connectedClients} phone online` : 'Scan the QR from your phone'}
+          detail={hasPhone ? `${connectInfo.connectedClients} ${copy.flow.phoneOnline}` : copy.flow.scanQrFromPhone}
         />
         <FlowStatusRow
-          label="Barcode received"
-          status={latestScan ? 'Received' : 'Waiting'}
+          label={copy.flow.barcodeReceived}
+          status={latestScan ? copy.flow.received : copy.flow.waiting}
           tone={latestScan ? 'good' : 'neutral'}
-          detail={latestScan ? latestScan.barcode : 'No barcode received yet'}
+          detail={latestScan ? latestScan.barcode : copy.flow.noBarcode}
         />
         <FlowStatusRow
-          label="Typed result"
-          status={typed ? 'Typed' : typingFailed ? 'Failed' : 'Waiting'}
+          label={copy.flow.typedResult}
+          status={typed ? copy.flow.typed : typingFailed ? copy.flow.failed : copy.flow.waiting}
           tone={typed ? 'good' : typingFailed ? 'bad' : 'neutral'}
-          detail={latestScan?.error ?? (typed ? 'Typed into focused input' : 'Click a target input before scanning')}
+          detail={latestScan?.error ?? (typed ? copy.flow.typedIntoInput : copy.flow.clickInput)}
         />
       </div>
-    </section>
+    </div>
   )
 }
 

@@ -1,12 +1,12 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { DesktopApi, DesktopConnectInfo, DesktopScanRecord, DesktopTypingSettings } from '../shared/desktop-api'
+import type { DesktopApi, DesktopAppSettings, DesktopConnectInfo, DesktopScanRecord } from '../shared/desktop-api'
 
 const api: DesktopApi = {
   getConnectInfo: () => ipcRenderer.invoke('phoneScan:getConnectInfo') as Promise<DesktopConnectInfo>,
   refreshConnectInfo: () => ipcRenderer.invoke('phoneScan:refreshConnectInfo') as Promise<DesktopConnectInfo>,
   getScanHistory: () => ipcRenderer.invoke('phoneScan:getScanHistory') as Promise<DesktopScanRecord[]>,
-  getSettings: () => ipcRenderer.invoke('phoneScan:getSettings') as Promise<DesktopTypingSettings>,
-  updateSettings: (settings) => ipcRenderer.invoke('phoneScan:updateSettings', settings) as Promise<DesktopTypingSettings>,
+  getSettings: () => ipcRenderer.invoke('phoneScan:getSettings') as Promise<DesktopAppSettings>,
+  updateSettings: (settings) => ipcRenderer.invoke('phoneScan:updateSettings', settings) as Promise<DesktopAppSettings>,
   openScannerPage: () => ipcRenderer.invoke('phoneScan:openScannerPage') as Promise<void>,
   minimizeWindow: () => ipcRenderer.invoke('phoneScan:minimizeWindow') as Promise<void>,
   toggleMaximizeWindow: () => ipcRenderer.invoke('phoneScan:toggleMaximizeWindow') as Promise<void>,

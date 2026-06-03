@@ -29,6 +29,8 @@ export type DesktopScanRecord = {
 
 export type DesktopTypingSuffix = 'none' | 'enter' | 'tab'
 
+export type DesktopLanguage = 'en' | 'lo'
+
 export type DesktopTypingSettings = {
   autoEnter: boolean
   autoTab: boolean
@@ -36,12 +38,17 @@ export type DesktopTypingSettings = {
   typingDelayMs: number
 }
 
+export type DesktopAppSettings = DesktopTypingSettings & {
+  language: DesktopLanguage
+  hasChosenLanguage: boolean
+}
+
 export type DesktopApi = {
   getConnectInfo: () => Promise<DesktopConnectInfo>
   refreshConnectInfo: () => Promise<DesktopConnectInfo>
   getScanHistory: () => Promise<DesktopScanRecord[]>
-  getSettings: () => Promise<DesktopTypingSettings>
-  updateSettings: (settings: DesktopTypingSettings) => Promise<DesktopTypingSettings>
+  getSettings: () => Promise<DesktopAppSettings>
+  updateSettings: (settings: DesktopAppSettings) => Promise<DesktopAppSettings>
   openScannerPage: () => Promise<void>
   minimizeWindow: () => Promise<void>
   toggleMaximizeWindow: () => Promise<void>
