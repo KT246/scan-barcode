@@ -74,6 +74,7 @@ type ScannerSettings = {
 
 const appLanguageStorageKey = 'phone-scan.language'
 const scannerSettingsStorageKey = 'phone-scan.scanner-settings'
+const activePageStorageKey = 'phone-scan.active-page'
 const scanIntervalOptions = [2000, 3000, 5000, 10000]
 const defaultScannerSettings: ScannerSettings = {
   autoSend: true,
@@ -658,6 +659,24 @@ function getInitialAppLanguage(): AppLanguage {
   }
 }
 
+function isMobilePage(value: unknown): value is MobilePage {
+  return value === 'scanner' || value === 'connect' || value === 'settings'
+}
+
+function getInitialMobilePage(connection: DesktopConnection): MobilePage {
+  try {
+    const storedPage = window.localStorage.getItem(activePageStorageKey)
+
+    if (isMobilePage(storedPage)) {
+      return storedPage
+    }
+  } catch {
+    // Storage can be unavailable in private browsing; fall back to connection state.
+  }
+
+  return connection.token ? 'scanner' : 'connect'
+}
+
 function isPwaStandalone() {
   const navigatorWithStandalone = navigator as Navigator & { standalone?: boolean }
 
@@ -715,7 +734,7 @@ function ScannerApp() {
   const [language, setLanguage] = useState<AppLanguage>(() => getInitialAppLanguage())
   const t: Translate = (key) => pwaText[language][key]
   const [connection, setConnection] = useState<DesktopConnection>(() => getInitialConnection())
-  const [page, setPage] = useState<MobilePage>(() => (connection.token ? 'scanner' : 'connect'))
+  const [page, setPage] = useState<MobilePage>(() => getInitialMobilePage(connection))
   const [scannerSettings, setScannerSettings] = useState<ScannerSettings>(() => getInitialScannerSettings())
   const [lastScan, setLastScan] = useState<LastScan | null>(null)
   const [lastSend, setLastSend] = useState<LastSend>({
@@ -809,6 +828,14 @@ function ScannerApp() {
       // Storage can be unavailable in private browsing; runtime settings still work.
     }
   }, [scannerSettings])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(activePageStorageKey, page)
+    } catch {
+      // Storage can be unavailable in private browsing; runtime navigation still works.
+    }
+  }, [page])
 
   useEffect(() => {
     if (!connection.token) {
