@@ -1002,7 +1002,6 @@ function ScannerApp() {
           />
         ) : page === 'settings' ? (
           <SettingsScreen
-            connection={connection}
             scannerSettings={scannerSettings}
             updateScannerSettings={updateScannerSettings}
             t={t}
@@ -1550,20 +1549,16 @@ function ScannerScreen({
 }
 
 function SettingsScreen({
-  connection,
   scannerSettings,
   updateScannerSettings,
   t,
 }: {
-  connection: DesktopConnection
   scannerSettings: ScannerSettings
   updateScannerSettings: (settings: Partial<ScannerSettings>) => void
   t: Translate
 }) {
   return (
     <div className="scanner-content settings-content">
-      <DesktopStatusPill connection={connection} t={t} />
-
       <section className="scanner-settings-card settings-page-card">
         <div className="scanner-settings-header">
           <div>
